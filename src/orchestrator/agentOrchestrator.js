@@ -87,7 +87,11 @@ class AgentOrchestrator {
     // 7. Start Scheduler
     marketScheduler.start();
 
-    // 8. Start Telegram Bot
+    // 8. Start Real-Time Trade Monitor (Auto Break-Even & Trailing Stop)
+    const tradeMonitor = require('../risk/tradeMonitor');
+    tradeMonitor.start(this);
+
+    // 9. Start Telegram Bot
     await this.telegram.init();
     await this.telegram.start();
 
