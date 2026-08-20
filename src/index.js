@@ -51,6 +51,14 @@ async function main() {
       }
     });
 
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.warn({ port }, `Port ${port} in use, continuing trading bot and Telegram polling seamlessly without HTTP port`);
+      } else {
+        logger.warn({ err: err.message }, 'HTTP server error');
+      }
+    });
+
     server.listen(port, () => {
       logger.info({ port }, 'HTTP Health Check & Dashboard Server running');
     });
