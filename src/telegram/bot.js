@@ -171,9 +171,11 @@ ${thesis.reasoning}
 • Invalidation: ${thesis.invalidation_level ? `$${thesis.invalidation_level}` : 'N/A'}
 
 ⚠️ *Risk Flags:*
-${thesis.caution_flags && thesis.caution_flags.length > 0 ? thesis.caution_flags.map(f => `• ${f}`).join('\n') : '• None'}
-`;
-        await ctx.reply(report, { parse_mode: 'Markdown' });
+        try {
+          await ctx.reply(report, { parse_mode: 'Markdown' });
+        } catch {
+          await ctx.reply(report.replace(/[*_`]/g, ''));
+        }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed /analyze command');
         await ctx.reply(`❌ Analysis failed: ${err.message}`);
@@ -535,25 +537,10 @@ ${thesis.reasoning}
       const text = ctx.message.text.trim();
       if (text.startsWith('/')) return; // Handled by command handlers
 
-      const lower = text.toLowerCase();
       const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
 
-      // Conversational Greeting with Interactive Smart UI
-      if (['hi', 'hello', 'hey', 'start', 'salam', 'assalam o alaikum'].includes(lower)) {
-        const kb = new InlineKeyboard()
-          .text('📊 Live Gold Analysis', 'ACTION:ANALYZE_15m')
-          .text('💼 Account Status', 'ACTION:STATUS').row()
-          .text('📈 1h Macro Trend', 'ACTION:ANALYZE_1h')
-          .text('🛡️ Open Positions', 'ACTION:POSITIONS');
-
-        return ctx.reply(
-          `👋 *Assalam o Alaikum Ali Raza!*\n\nMain aap ka **Autonomous Gold (XAU/USD) Trading AI Agent** hoon.\n\n⚜️ *Current Market State:*\n• Live Gold Price: \`$${exactPrice.toFixed(2)} USD\`\n• Broker: \`Exness MT5 (Trial16)\`\n• Balance: \`$463.91 USD\`\n\nNeeche diye gaye buttons par tap karein ya mujh se koi bhi trading sawal poochein:`,
-          { parse_mode: 'Markdown', reply_markup: kb }
-        );
-      }
-
-      // Intelligent Conversational AI Reasoner with Full Institutional Memory & Technical Matrix
-      await ctx.reply('💭 *Analyzing institutional multi-timeframe structure, memory & market context with DeepSeek AI...*', { parse_mode: 'Markdown' });
+      // Intelligent Conversational AI Reasoner with Full Institutional Memory & Technical Matrix (100% Dynamic DeepSeek-V4-Pro)
+      await ctx.reply('💭 *Analyzing market context & synthesizing response with DeepSeek-V4-Pro...*', { parse_mode: 'Markdown' });
       try {
         const AgentMemory = require('../memory/agentMemory');
         AgentMemory.addChatMessage(ctx.chat.id, 'user', text);
@@ -577,6 +564,7 @@ ${thesis.reasoning}
         const systemPrompt = `
 You are an Elite Institutional Gold (XAU/USD) Trading AI Agent & Copilot chatting with user Ali Raza in Telegram.
 You have complete knowledge of technical indicators, SMC/ICT concepts, multi-timeframe levels, broker account data, trade performance history, and past chat memory.
+DO NOT use pre-made, robotic, or canned template phrases. Formulate a 100% custom, dynamic, context-aware, professional response to whatever the user says (greetings, trading questions, open positions inquiry, analysis, strategy, etc.).
 
 ===================================================================
 1. REAL-TIME BROKER ACCOUNT (EXNESS MT5)
@@ -586,14 +574,15 @@ You have complete knowledge of technical indicators, SMC/ICT concepts, multi-tim
 - Equity: $${Number(fullContext.broker.equity).toFixed(2)} USD | Free Margin: $${Number(fullContext.broker.freeMargin).toFixed(2)} USD
 - Floating PnL: $${Number(fullContext.broker.floatingPnl).toFixed(2)} USD
 - Leverage: ${fullContext.broker.leverage} | Active Open Positions: ${fullContext.openPositions.length}
-- Positions Details: ${JSON.stringify(fullContext.openPositions)}
+- Active Open Positions Details: ${JSON.stringify(fullContext.openPositions)}
 
 ===================================================================
 2. MULTI-TIMEFRAME TECHNICAL, INDICATORS & SMC MATRIX (1W to 5m)
 ===================================================================
 ${JSON.stringify(fullContext.technicalMatrix, null, 2)}
-- Macro Correlations: DXY: ${fullContext.macroCorrelations.DXY?.price} (${fullContext.macroCorrelations.DXY?.bias}), Silver: $${fullContext.macroCorrelations.XAGUSD?.price} (${fullContext.macroCorrelations.XAGUSD?.bias})
+- Macro Correlations: DXY: ${fullContext.macroSnapshot.DXY?.price} (${fullContext.macroSnapshot.DXY?.bias}), Silver: $${fullContext.macroSnapshot.XAGUSD?.price} (${fullContext.macroSnapshot.XAGUSD?.bias})
 - Market Session: ${fullContext.marketSession.sessionName} (${fullContext.marketSession.killzone})
+- SMT Divergence: ${fullContext.smtDivergence ? JSON.stringify(fullContext.smtDivergence) : 'None detected'}
 
 ===================================================================
 3. TRADE PERFORMANCE & HISTORICAL MEMORY
@@ -611,15 +600,15 @@ ${JSON.stringify(fullContext.recentChat)}
 ===================================================================
 BEHAVIORAL & TONE GUIDELINES
 ===================================================================
-1. Personality: Highly professional, sharp institutional hedge-fund trader demeanor.
+1. Personality: Highly intelligent, concise, sharp senior institutional trader.
 2. Language: Fluent Roman Urdu / Urdu (or English if queried in English).
-3. Emoji Discipline: Use minimal, clean, professional emojis only (e.g. ⚜️, 📊, 📈, 📉, ⚡, 🛡️, ⚖️). Absolutely NO spammy or cartoonish emojis.
-4. Deep Analysis: Explain multi-timeframe alignment (Weekly macro trend, Daily levels PDH/PDL, 4h/1h order blocks & FVGs, 15m/5m entry triggers).
-5. Never forget past discussion, recent losses/profits, or account balance.
+3. Emoji Discipline: Minimal, elegant, professional emojis only (⚜️, 📊, 📈, 📉, ⚡, 🛡️, ⚖️). No emoji spam.
+4. If the user asks about open trades / positions, list their exact active tickets, lots, entry prices, and current floating PnL directly!
+5. If the user greets or asks anything general, provide a natural, respectful greeting and highlight current live Gold state without canned templates.
 
 Return valid JSON with schema:
 {
-  "reply": "Clear, professional markdown formatted response addressing the user's question directly with exact levels, indicators, and SMC logic.",
+  "reply": "Your custom dynamic response addressing the user's inquiry with exact numbers and rationale.",
   "trade_suggestion": {
     "recommended": boolean,
     "type": "BUY" | "SELL" | null,
@@ -687,7 +676,6 @@ Always provide 2 to 4 actionable buttons for effortless user interaction!
           const data = await response.json();
           const msg = data.choices?.[0]?.message || {};
           const content = msg.content || '{}';
-          const reasoningContent = msg.reasoning_content || null;
 
           let parsed;
           try {
@@ -728,7 +716,12 @@ Always provide 2 to 4 actionable buttons for effortless user interaction!
               .text('🛡️ Open Positions', 'ACTION:POSITIONS');
           }
 
-          await ctx.reply(parsed.reply, { parse_mode: 'Markdown', reply_markup: kb });
+          // Resilient reply: avoids 400 Bad Request if unescaped markdown chars are present
+          try {
+            await ctx.reply(parsed.reply, { parse_mode: 'Markdown', reply_markup: kb });
+          } catch {
+            await ctx.reply(parsed.reply.replace(/[*_`]/g, ''), { reply_markup: kb });
+          }
         } else {
           const kb = new InlineKeyboard()
             .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
@@ -740,7 +733,7 @@ Always provide 2 to 4 actionable buttons for effortless user interaction!
         const kb = new InlineKeyboard()
           .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
           .text('💼 Account Status', 'ACTION:STATUS');
-        await ctx.reply(`⚜️ *Gold Price:* \`$${exactPrice.toFixed(2)} USD\`\n• Type /analyze for full SMC/ICT thesis!`, { parse_mode: 'Markdown', reply_markup: kb });
+        await ctx.reply(`⚠️ Notice: ${err.message}\nLive Gold Price: $${exactPrice.toFixed(2)} USD`, { reply_markup: kb });
       }
     });
   }
