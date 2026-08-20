@@ -15,6 +15,7 @@ const config = {
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
     adminPassword: process.env.ADMIN_PASSWORD || 'ALirazamakki12@',
+    apiRoot: process.env.TELEGRAM_API_ROOT || undefined,
     allowedUserIds: (process.env.TELEGRAM_ALLOWED_USER_IDS || '')
       .split(',')
       .map(id => id.trim())

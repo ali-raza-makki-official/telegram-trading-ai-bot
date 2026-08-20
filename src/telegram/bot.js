@@ -25,7 +25,11 @@ class TelegramBotService {
       if (savedAdminId) this.adminChatId = Number(savedAdminId);
     }
 
-    this.bot = new Bot(this.botToken);
+    const botOptions = {};
+    if (config.telegram.apiRoot) {
+      botOptions.client = { apiRoot: config.telegram.apiRoot };
+    }
+    this.bot = new Bot(this.botToken, botOptions);
     
     // Error boundary
     this.bot.catch((err) => {
