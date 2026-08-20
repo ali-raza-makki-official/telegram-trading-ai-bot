@@ -144,7 +144,13 @@ class AgentMemory {
     const tradeHistory = await this.getTradeAndMemorySummary();
     const openPositions = await orchestrator.getOpenPositions();
     const recentChat = this.getChatHistory(chatId, 8);
-    const correlated = marketFeed.getCorrelatedData();
+    const macroEngine = require('../market-data/macroEngine');
+    const macroSnapshot = macroEngine.getMacroSnapshot();
+
+    // SMT Divergence Check between 15m Gold and Silver
+    const gold15m = candleManager.getCandles(primarySymbol, '15m');
+    const silver15m = candleManager.getCandles('XAGUSD', '15m');
+    const smtDivergence = macroEngine.detectSMTDivergence(gold15m, silver15m);
 
     return {
       asset: primarySymbol,
@@ -171,9 +177,12 @@ class AgentMemory {
         sessionName: session.marketSession,
         killzone: session.activeKillzone ? session.activeKillzone.name : 'Standard Liquidity Window',
         utcTime: session.utcTime,
+        isWeekend: session.isWeekend,
+        minutesToFridayClose: session.minutesToFridayClose,
       },
       technicalMatrix,
-      macroCorrelations: correlated,
+      macroSnapshot,
+      smtDivergence,
       tradeHistory,
       recentChat,
     };
@@ -181,3 +190,4 @@ class AgentMemory {
 }
 
 module.exports = AgentMemory;
+
