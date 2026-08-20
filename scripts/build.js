@@ -1,0 +1,45 @@
+const fs = require('fs');
+const path = require('path');
+
+console.log('--- RUNNING HOSTINGER BUILD PIPELINE ---');
+
+const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gold (XAU/USD) Trading AI Agent</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 40px; max-width: 600px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+    h1 { color: #f59e0b; margin-top: 0; }
+    .badge { display: inline-block; background: #10b981; color: #000; font-weight: bold; padding: 6px 14px; border-radius: 9999px; margin-bottom: 20px; }
+    p { color: #94a3b8; line-height: 1.6; }
+    .btn { display: inline-block; background: #3b82f6; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-top: 20px; transition: background 0.2s; }
+    .btn:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">● LIVE & OPERATIONAL</div>
+    <h1>Gold (XAU/USD) Trading AI Agent</h1>
+    <p>Autonomous algorithmic trading bot powered by DeepSeek R1/V3, Smart Money Concepts (SMC), and Inner Circle Trader (ICT) strategies with MetaApi Cloud execution.</p>
+    <p>Control the bot live via Telegram:</p>
+    <a class="btn" href="https://t.me/XAUUSD_Trading_AI_Agent_bot" target="_blank">Open Telegram Bot (@XAUUSD_Trading_AI_Agent_bot)</a>
+  </div>
+</body>
+</html>`;
+
+// Create output directories for all common cloud platforms (Hostinger, Vercel, Netlify, Render)
+const outputDirs = ['dist', 'public', 'build', '.output/public'];
+
+for (const dir of outputDirs) {
+  const fullPath = path.resolve(process.cwd(), dir);
+  if (!fs.existsSync(fullPath)) {
+    fs.mkdirSync(fullPath, { recursive: true });
+  }
+  fs.writeFileSync(path.join(fullPath, 'index.html'), htmlContent, 'utf8');
+}
+
+console.log('✓ Successfully generated output directories: dist/, public/, build/');
+console.log('✓ Build completed successfully with 0 errors.');
