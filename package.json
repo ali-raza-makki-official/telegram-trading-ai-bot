@@ -1,0 +1,54 @@
+{
+  "name": "telegram-trading-ai-bot",
+  "version": "1.0.0",
+  "description": "Autonomous Gold (XAU/USD) Trading Agent controlled via Telegram with SMC/ICT strategy engine, multi-provider LLM reasoning, memory/accuracy tracking, and risk-managed execution.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "jest --runInBand --detectOpenHandles",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "trading-bot",
+    "xauusd",
+    "gold-trading",
+    "telegram-bot",
+    "smc",
+    "ict",
+    "llm",
+    "claude",
+    "gemini",
+    "algorithmic-trading"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@google/generative-ai": "^0.21.0",
+    "better-sqlite3": "^11.8.1",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.7",
+    "grammy": "^1.34.0",
+    "metaapi.cloud-sdk": "^29.3.3",
+    "mysql2": "^3.12.0",
+    "node-cron": "^3.0.3",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "technicalindicators": "^3.1.0",
+    "ws": "^8.21.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "verbose": true
+  }
+}
