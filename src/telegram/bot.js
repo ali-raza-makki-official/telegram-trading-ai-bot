@@ -26,9 +26,16 @@ class TelegramBotService {
     }
 
     this.bot = new Bot(this.botToken);
+    
+    // Error boundary
+    this.bot.catch((err) => {
+      logger.error({ err: err.message, ctx: err.ctx?.update }, 'Telegram bot error caught in boundary');
+    });
+
     this.setupAuthMiddleware();
     this.setupCommands();
     this.setupCallbackQueries();
+    this.setupMessageHandlers();
     logger.info('Telegram Bot initialized');
   }
 
@@ -305,6 +312,64 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
         await ctx.reply('❌ *Trade Signal Dismissed.*', { parse_mode: 'Markdown' });
         await ctx.answerCallbackQuery({ text: 'Signal dismissed' });
+      }
+    });
+  }
+
+  setupMessageHandlers() {
+    this.bot.on('message:text', async (ctx) => {
+      const text = ctx.message.text.trim();
+      if (text.startsWith('/')) return; // handled by command handlers
+
+      const lower = text.toLowerCase();
+      if (['hi', 'hello', 'hey', 'start', 'salam', 'assalam o alaikum'].includes(lower)) {
+        return ctx.reply(
+          `👋 *Hello Ali Raza!*\n\nI am your **AI Gold (XAU/USD) Trading Agent** connected to Exness MT5.\n\n📋 *Quick Commands:*\n• /status — Account Balance ($463.91), Equity & Market state\n• /analyze — DeepSeek AI Gold Technical Analysis\n• /positions — View active open trades\n• /help — Full command manual\n\n_Or simply ask me any trading question!_`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      // Answer conversational trading questions using DeepSeek AI
+      await ctx.reply('💭 *Thinking with DeepSeek AI...*', { parse_mode: 'Markdown' });
+      try {
+        const summary = await this.orchestrator.getStatusSummary();
+        const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
+        const ds = new DeepSeekProvider();
+
+        if (!ds.isAvailable()) {
+          return ctx.reply(`Current Gold Price: $${summary.currentPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
+        }
+
+        const response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ds.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: ds.model,
+            messages: [
+              {
+                role: 'system',
+                content: `You are an expert Autonomous Gold (XAU/USD) Trading AI assistant connected to Exness MT5. Current Gold price is $${summary.currentPrice.toFixed(2)}, Market Session: ${summary.session.marketSession}. Be concise, professional, and provide clear SMC/ICT trading insights.`,
+              },
+              { role: 'user', content: text },
+            ],
+            temperature: 0.3,
+            max_tokens: 800,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const aiReply = data.choices?.[0]?.message?.content || 'I could not generate a response.';
+          await ctx.reply(`🤖 *AI Assistant:*\n\n${aiReply}`, { parse_mode: 'Markdown' });
+        } else {
+          await ctx.reply(`Current Gold Price: $${summary.currentPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
+        }
+      } catch (err) {
+        logger.error({ err: err.message }, 'Failed handling text message');
+        await ctx.reply(`Current Gold Price: $${(this.orchestrator.primarySymbol || 'XAUUSD')}\nType /analyze for full SMC/ICT thesis!`);
       }
     });
   }
