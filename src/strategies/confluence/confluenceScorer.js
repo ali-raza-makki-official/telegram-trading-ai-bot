@@ -154,32 +154,6 @@ function scoreConfluence({
     suggestedTp2 = Number((currentPrice - riskDistance * 3.0).toFixed(2));
   }
 
-  return {
-    symbol,
-    score: finalScore,
-    confidence,
-    minThreshold: MIN_CONFLUENCE_THRESHOLD,
-    bias,
-    isActionable,
-    currentPrice,
-    suggestedSl,
-    suggestedTp1,
-    suggestedTp2,
-    invalidationLevel,
-    riskRewardRatio: '1:2.0',
-    primarySetup: smc.primarySetup || ict.primarySetup || 'Multi-Timeframe Structure',
-    reasons: keyReasons,
-    timeframeDetails: {
-      triggerTimeframe: triggerTf,
-      higherTimeframe: htf,
-      smc,
-      ict,
-      smt,
-      indicators,
-      candlesticks: candlesPattern,
-    },
-  };
-
   const riskRewardRatio = suggestedSl && suggestedTp1 && Math.abs(currentPrice - suggestedSl) > 0
     ? Number((Math.abs(suggestedTp1 - currentPrice) / Math.abs(currentPrice - suggestedSl)).toFixed(2))
     : 1.5;
@@ -190,15 +164,27 @@ function scoreConfluence({
     htfTimeframe: htf,
     score: finalScore,
     confidence,
+    minThreshold: MIN_CONFLUENCE_THRESHOLD,
     bias,
+    isActionable,
     currentPrice,
     suggestedSl,
     suggestedTp1,
     suggestedTp2,
     invalidationLevel,
-    riskRewardRatio,
-    isActionable: confidence >= 60,
+    riskRewardRatio: `${riskRewardRatio}R`,
+    primarySetup: smc.primarySetup || ict.primarySetup || 'Multi-Timeframe Structure',
+    reasons: keyReasons,
     keyReasons,
+    timeframeDetails: {
+      triggerTimeframe: triggerTf,
+      higherTimeframe: htf,
+      smc,
+      ict,
+      smt,
+      indicators,
+      candlesticks: candlesPattern,
+    },
     breakdown: {
       smc: { score: smc.score, bias: smc.bias, details: smc },
       ict: { score: ict.score, bias: ict.bias, details: ict },

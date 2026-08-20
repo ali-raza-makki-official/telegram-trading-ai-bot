@@ -55,14 +55,13 @@ Trigger Timeframe: ${confluenceData.triggerTimeframe}
 Higher Timeframe (HTF): ${confluenceData.htfTimeframe} (Bias: ${confluenceData.breakdown?.htf?.bias || 'NEUTRAL'})
 
 Key Confluence Drivers:
-${confluenceData.keyReasons.map(r => `• ${r}`).join('\n')}
+${((confluenceData.keyReasons || confluenceData.reasons || []).map(r => `• ${r}`).join('\n')) || '• Multi-timeframe structure'}
 
 SMC Details:
-- Market Structure Trend: ${confluenceData.breakdown?.smc?.details?.structure?.trend || 'N/A'}
-- Recent Event: ${confluenceData.breakdown?.smc?.details?.structure?.recentCHoCH?.type || confluenceData.breakdown?.smc?.details?.structure?.recentBOS?.type || 'None'}
-- Nearest Order Block: ${confluenceData.breakdown?.smc?.details?.orderBlocks?.nearestBullishOB ? `Bullish OB: $${confluenceData.breakdown.smc.details.orderBlocks.nearestBullishOB.bottom} - $${confluenceData.breakdown.smc.details.orderBlocks.nearestBullishOB.top}` : 'None'}
-- Nearest FVG: ${confluenceData.breakdown?.smc?.details?.fvg?.nearestBullishFVG ? `Bullish FVG: $${confluenceData.breakdown.smc.details.fvg.nearestBullishFVG.bottom} - $${confluenceData.breakdown.smc.details.fvg.nearestBullishFVG.top}` : 'None'}
-- Pricing Zone: ${confluenceData.breakdown?.smc?.details?.premiumDiscount?.zone || 'EQUILIBRIUM'}
+- Market Structure Trend: ${confluenceData.breakdown?.smc?.details?.structure?.trend || confluenceData.timeframeDetails?.smc?.structure?.trend || 'N/A'}
+- Recent Event: ${confluenceData.breakdown?.smc?.details?.structure?.recentCHoCH?.type || confluenceData.timeframeDetails?.smc?.structure?.recentCHoCH?.type || 'None'}
+- Nearest Order Block: ${confluenceData.timeframeDetails?.smc?.orderBlocks?.nearestBullishOB ? `Bullish OB: $${confluenceData.timeframeDetails.smc.orderBlocks.nearestBullishOB.bottom}` : 'None'}
+- Pricing Zone: ${confluenceData.timeframeDetails?.smc?.premiumDiscount?.zone || 'EQUILIBRIUM'}
 
 Candlestick Pattern:
 - Detected: ${confluenceData.breakdown?.candlesticks?.primaryPattern ? `${confluenceData.breakdown.candlesticks.primaryPattern.pattern} (${confluenceData.breakdown.candlesticks.primaryPattern.bias})` : 'None significant'}
