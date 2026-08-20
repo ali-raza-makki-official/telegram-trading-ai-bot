@@ -56,16 +56,49 @@ class TelegramBotService {
   }
 
   setupCommands() {
+    // /auth [password]
+    this.bot.command('auth', async (ctx) => {
+      const parts = ctx.message.text.trim().split(/\s+/);
+      const pass = parts[1];
+
+      if (pass === config.telegram.adminPassword) {
+        this.adminChatId = ctx.chat.id;
+        await SettingsRepo.set('admin_chat_id', ctx.chat.id);
+        logger.info({ adminChatId: this.adminChatId, user: ctx.from?.username }, 'Admin authenticated via password in Telegram');
+        
+        await ctx.reply(
+          `✅ *Authentication Successful!*\n\nYou are verified as the **Master Admin** for Gold AI Trading Agent.\n\nType */status* or */analyze* to start controlling the agent!`,
+          { parse_mode: 'Markdown' }
+        );
+      } else {
+        await ctx.reply(
+          `❌ *Invalid Password!*\n\nPlease use: \`/auth ALirazamakki12@\``,
+          { parse_mode: 'Markdown' }
+        );
+      }
+    });
+
     // /start
     this.bot.command('start', async (ctx) => {
-      if (!this.adminChatId && ctx.chat?.id) {
+      const payload = ctx.match?.trim();
+      const { verifyPairCode } = require('../server/webDashboard');
+
+      if (payload && (verifyPairCode(payload) || payload === config.telegram.adminPassword)) {
+        this.adminChatId = ctx.chat.id;
+        await SettingsRepo.set('admin_chat_id', ctx.chat.id);
+        await ctx.reply(`🎉 *Web Portal Paired Successfully!*\nYou are now registered as Master Admin.`, { parse_mode: 'Markdown' });
+      } else if (!this.adminChatId && ctx.chat?.id) {
         this.adminChatId = ctx.chat.id;
         await SettingsRepo.set('admin_chat_id', ctx.chat.id);
       }
+
       const msg = `
 🤖 *Autonomous Gold (XAU/USD) Trading Agent*
 
-Welcome! I am your AI-powered trading copilot analyzing market structure, SMC, ICT killzones, and candlestick patterns.
+Welcome Ali Raza! I am your AI-powered trading copilot analyzing market structure, SMC, ICT killzones, and candlestick patterns.
+
+🔐 *Admin Security:*
+If prompted for password, send: \`/auth ALirazamakki12@\`
 
 📋 *Available Commands:*
 • /status — System health, open positions & market bias

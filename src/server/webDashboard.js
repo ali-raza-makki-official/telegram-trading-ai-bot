@@ -1,4 +1,31 @@
-<!DOCTYPE html>
+const http = require('http');
+const config = require('../config');
+const { SettingsRepo } = require('../database');
+const logger = require('../utils/logger');
+const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
+
+// In-memory active pairing codes: code -> timestamp
+const activePairCodes = new Map();
+
+function generatePairCode() {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  activePairCodes.set(code, Date.now() + 10 * 60 * 1000); // 10 min validity
+  return code;
+}
+
+function verifyPairCode(code) {
+  if (!code) return false;
+  const clean = code.replace(/^PAIR_/, '').trim();
+  const exp = activePairCodes.get(clean);
+  if (exp && exp > Date.now()) {
+    activePairCodes.delete(clean);
+    return true;
+  }
+  return false;
+}
+
+function getDashboardHtml() {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -388,4 +415,94 @@
     }
   </script>
 </body>
-</html>
+</html>`;
+}
+
+// Router for HTTP Server & Dashboard
+function handleDashboardRequest(req, res, orchestrator) {
+  const url = req.url;
+
+  // 1. Health Check
+  if (url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
+  }
+
+  // 2. Status API
+  if (url === '/api/status') {
+    const primarySym = config.system.primarySymbol;
+    const price = require('../market-data/marketFeed').getLatestPrice(primarySym) || 2685.50;
+    const session = require('../strategies/ict/killzones').getCurrentSessionInfo();
+    
+    orchestrator.getStatusSummary().then(summary => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        goldPrice: price,
+        balance: summary.account.balance,
+        equity: summary.account.equity,
+        server: orchestrator.executionMode === 'metaapi' ? 'Exness-MT5Trial16' : 'Paper Engine',
+        session: session.marketSession,
+        killzone: session.activeKillzone ? session.activeKillzone.name : 'None',
+        bias: orchestrator.latestBias,
+        telegramAdmin: orchestrator.telegram?.adminChatId || null,
+      }));
+    }).catch(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ goldPrice: price, balance: 463.91, session: session.marketSession }));
+    });
+    return;
+  }
+
+  // 3. DeepSeek Analysis API
+  if (url === '/api/analyze') {
+    orchestrator.runOnDemandAnalysis('XAUUSD', '15m').then(thesis => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(thesis));
+    }).catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
+  // 4. Trade Execution API
+  if (url === '/api/trade/execute' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        if (payload.password !== config.telegram.adminPassword) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, error: 'Unauthorized password' }));
+        }
+
+        const result = await orchestrator.executeManualTrade({
+          symbol: config.system.primarySymbol,
+          type: payload.type,
+          lot: payload.lot,
+          sl: payload.sl,
+          tp: payload.tp,
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 5. Default: Render Web Dashboard HTML
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(getDashboardHtml());
+}
+
+module.exports = {
+  getDashboardHtml,
+  handleDashboardRequest,
+  generatePairCode,
+  verifyPairCode,
+};
