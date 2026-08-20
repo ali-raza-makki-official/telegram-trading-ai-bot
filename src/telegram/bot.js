@@ -46,6 +46,28 @@ class TelegramBotService {
     this.setupCommands();
     this.setupCallbackQueries();
     this.setupMessageHandlers();
+
+    // Register Official Telegram Command Menu list
+    try {
+      await this.bot.api.setMyCommands([
+        { command: 'start', description: '🤖 Start AI Agent & Main Portal' },
+        { command: 'status', description: '📊 System Health, Equity & Live Price' },
+        { command: 'analyze', description: '🔍 Run On-Demand SMC/ICT Visual Analysis' },
+        { command: 'positions', description: '🛡️ View Active Open Trades & PnL' },
+        { command: 'execute', description: '⚡ Execute: /execute [buy/sell] [lot] [sl] [tp]' },
+        { command: 'close', description: '❌ Close: /close [ticket|all]' },
+        { command: 'mode', description: '⚙️ Autonomy Mode: /mode [auto|semi|manual]' },
+        { command: 'config', description: '🔧 Strategy Weights & Dynamic Config' },
+        { command: 'accuracy', description: '🎯 AI Prediction Win Rate & Accuracy' },
+        { command: 'schedule', description: '🕒 Killzone Timers & Market Hours' },
+        { command: 'pause', description: '⏸️ Pause Automated AI Engine' },
+        { command: 'resume', description: '▶️ Resume Automated AI Engine' },
+      ]);
+      logger.info('Telegram Bot commands menu registered successfully with Telegram API');
+    } catch (cmdErr) {
+      logger.warn({ err: cmdErr.message }, 'Failed to set Telegram bot commands menu');
+    }
+
     logger.info('Telegram Bot initialized');
   }
 
