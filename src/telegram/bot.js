@@ -476,6 +476,8 @@ _Tap below to execute order within 3 minutes._
       onStart: (botInfo) => {
         logger.info({ username: botInfo.username }, 'Telegram bot started listening');
       },
+    }).catch((err) => {
+      logger.warn({ err: err.message }, 'Telegram polling interrupted / conflict detected');
     });
   }
 
