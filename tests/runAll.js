@@ -93,6 +93,12 @@ async function runTests() {
   const metaApiClient = require('../src/execution/MetaApiClient');
   assert(typeof metaApiClient.connect === 'function' && typeof metaApiClient.openOrder === 'function', 'MetaApiClient exports WebSocket RPC methods');
 
+  // 8. DeepSeek LLM Provider Test
+  console.log(chalk.cyan('\n8. Testing DeepSeek LLM Provider Module:'));
+  const DeepSeekProvider = require('../src/llm/providers/DeepSeekProvider');
+  const ds = new DeepSeekProvider();
+  assert(typeof ds.generateThesis === 'function' && ds.baseUrl.includes('deepseek'), 'DeepSeekProvider exports OpenAI-compatible reasoning methods');
+
   console.log(chalk.yellow.bold(`\n=================================================`));
   console.log(chalk.green.bold(`  ALL TESTS COMPLETED: ${totalPassed} Passed, ${totalFailed} Failed`));
   console.log(chalk.yellow.bold(`=================================================\n`));

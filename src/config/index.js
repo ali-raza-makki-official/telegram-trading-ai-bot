@@ -24,7 +24,7 @@ const config = {
 
   // LLM Provider
   llm: {
-    primaryProvider: process.env.LLM_PRIMARY_PROVIDER || 'gemini', // 'gemini' | 'claude' | 'hybrid'
+    primaryProvider: process.env.LLM_PRIMARY_PROVIDER || 'gemini', // 'gemini' | 'claude' | 'deepseek' | 'hybrid'
     gemini: {
       apiKey: process.env.GEMINI_API_KEY || '',
       model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
@@ -32,6 +32,11 @@ const config = {
     claude: {
       apiKey: process.env.ANTHROPIC_API_KEY || '',
       model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+    },
+    deepseek: {
+      apiKey: process.env.DEEPSEEK_API_KEY || '',
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat', // 'deepseek-chat' (V3) | 'deepseek-reasoner' (R1)
+      baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     },
   },
 

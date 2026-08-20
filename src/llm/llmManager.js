@@ -1,5 +1,6 @@
 const ClaudeProvider = require('./providers/ClaudeProvider');
 const GeminiProvider = require('./providers/GeminiProvider');
+const DeepSeekProvider = require('./providers/DeepSeekProvider');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { formatAnalysisPrompt } = require('./prompts');
@@ -10,6 +11,7 @@ class LLMManager {
   constructor() {
     this.claude = new ClaudeProvider();
     this.gemini = new GeminiProvider();
+    this.deepseek = new DeepSeekProvider();
     this.primaryProvider = config.llm.primaryProvider;
   }
 
@@ -48,23 +50,35 @@ class LLMManager {
     });
 
     // 4. Execute via Configured LLM Provider
-    if (this.primaryProvider === 'claude' && this.claude.isAvailable()) {
+    if (this.primaryProvider === 'deepseek' && this.deepseek.isAvailable()) {
+      try {
+        return await this.deepseek.generateThesis(promptText);
+      } catch (err) {
+        logger.warn('DeepSeek failed, attempting Gemini fallback');
+        if (this.gemini.isAvailable()) return await this.gemini.generateThesis(promptText);
+      }
+    } else if (this.primaryProvider === 'claude' && this.claude.isAvailable()) {
       try {
         return await this.claude.generateThesis(promptText);
       } catch (err) {
-        logger.warn('Claude failed, falling back to Gemini if available');
-        if (this.gemini.isAvailable()) {
-          return await this.gemini.generateThesis(promptText);
-        }
+        logger.warn('Claude failed, falling back to DeepSeek or Gemini');
+        if (this.deepseek.isAvailable()) return await this.deepseek.generateThesis(promptText);
+        if (this.gemini.isAvailable()) return await this.gemini.generateThesis(promptText);
       }
     } else if (this.primaryProvider === 'gemini' && this.gemini.isAvailable()) {
       try {
         return await this.gemini.generateThesis(promptText);
       } catch (err) {
-        logger.warn('Gemini failed, falling back to Claude if available');
-        if (this.claude.isAvailable()) {
-          return await this.claude.generateThesis(promptText);
-        }
+        logger.warn('Gemini failed, falling back to DeepSeek or Claude');
+        if (this.deepseek.isAvailable()) return await this.deepseek.generateThesis(promptText);
+        if (this.claude.isAvailable()) return await this.claude.generateThesis(promptText);
+      }
+    } else if (this.deepseek.isAvailable()) {
+      // Auto fallback to DeepSeek if configured
+      try {
+        return await this.deepseek.generateThesis(promptText);
+      } catch (err) {
+        logger.warn({ err: err.message }, 'DeepSeek auto-provider error');
       }
     } else if (this.primaryProvider === 'hybrid' && this.claude.isAvailable() && this.gemini.isAvailable()) {
       // Dual-model consensus
