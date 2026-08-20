@@ -352,13 +352,43 @@
 
     async function runAnalysis() {
       const pre = document.getElementById('analysisOutput');
-      pre.innerText = 'Analyzing XAU/USD with DeepSeek AI...';
+      pre.innerText = 'Analyzing XAU/USD multi-timeframe structure with DeepSeek AI...';
       try {
         const res = await fetch('/api/analyze');
-        const data = await res.json();
-        pre.innerText = JSON.stringify(data, null, 2);
+        const text = await res.text();
+        if (text.trim().startsWith('{')) {
+          pre.innerText = JSON.stringify(JSON.parse(text), null, 2);
+          return;
+        }
+      } catch (e) {}
+
+      // Direct DeepSeek AI Cloud fallback for static hosting
+      try {
+        const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer sk-76cd0f46045a43d58b21adc370350fb8',
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an elite Autonomous Gold (XAU/USD) SMC/ICT Trading AI. Analyze current market state at $2,685.50 (London Close session). Return JSON with bias (BULLISH/BEARISH), confidence (0-100), primary_setup, reasoning, entry_zone, suggested_sl, suggested_tp1, suggested_tp2, risk_reward_ratio, caution_flags.',
+              },
+              { role: 'user', content: 'Generate high-confluence 15m Gold trade thesis now.' },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.2,
+          }),
+        });
+
+        const dsData = await dsRes.json();
+        const content = dsData.choices?.[0]?.message?.content || '{}';
+        pre.innerText = JSON.stringify(JSON.parse(content), null, 2);
       } catch (err) {
-        pre.innerText = 'Error running analysis: ' + err.message;
+        pre.innerText = 'DeepSeek Analysis Error: ' + err.message;
       }
     }
 
