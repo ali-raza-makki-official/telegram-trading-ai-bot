@@ -162,12 +162,27 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at BIGINT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS vector_memories (
+CREATE TABLE IF NOT EXISTS strategy_config (
   id VARCHAR(64) PRIMARY KEY,
-  category VARCHAR(50) NOT NULL,
-  context_text TEXT NOT NULL,
-  embedding LONGTEXT NOT NULL,
-  metadata LONGTEXT,
+  param_key VARCHAR(100) UNIQUE NOT NULL,
+  param_value DOUBLE NOT NULL,
+  param_type VARCHAR(20) NOT NULL,
+  min_bound DOUBLE,
+  max_bound DOUBLE,
+  is_ai_tunable INT DEFAULT 0,
+  changed_by VARCHAR(30),
+  changed_at BIGINT,
+  previous_value DOUBLE,
+  version_number INT DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS strategy_config_history (
+  id VARCHAR(64) PRIMARY KEY,
+  param_key VARCHAR(100) NOT NULL,
+  old_value DOUBLE,
+  new_value DOUBLE NOT NULL,
+  changed_by VARCHAR(30) NOT NULL,
+  rationale TEXT,
   timestamp BIGINT NOT NULL
 );
 `;

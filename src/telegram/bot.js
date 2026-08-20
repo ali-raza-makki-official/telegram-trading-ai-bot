@@ -304,6 +304,26 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       await ctx.reply(msg, { parse_mode: 'Markdown' });
     });
 
+    // /config — Dynamic Strategy Config & Adaptive Parameter Store (Section 7)
+    this.bot.command('config', async (ctx) => {
+      const dynamicConfig = require('../config/dynamicConfig');
+      const configs = dynamicConfig.getAll();
+      
+      let text = '⚙️ *Dynamic Strategy Configuration & Adaptive Store*\n\n';
+      text += '📊 *Strategy Weights & Thresholds (AI Tunable):*\n';
+      for (const c of configs.filter(c => c.is_ai_tunable)) {
+        text += `• \`${c.param_key}\`: *${c.param_value}* (Range: ${c.min_bound}-${c.max_bound} | v${c.version_number})\n`;
+      }
+      
+      text += '\n🛡️ *Hard Risk Limits (Human-Only):*\n';
+      for (const c of configs.filter(c => !c.is_ai_tunable)) {
+        text += `• \`${c.param_key}\`: *${c.param_value}* (v${c.version_number})\n`;
+      }
+      
+      text += '\n_Use Web Dashboard or adaptive tuning approvals to adjust parameters dynamically without redeploying code._';
+      await ctx.reply(text, { parse_mode: 'Markdown' });
+    });
+
     // /schedule
     this.bot.command('schedule', async (ctx) => {
       const session = this.orchestrator.getCurrentSession();
@@ -517,6 +537,32 @@ ${thesis.reasoning}
       }
 
       // 6. Signal Approval Fallback
+      // Section 7 AI Adaptive Parameter Tuning Approvals
+      if (data.startsWith('APPROVE_TUNING_')) {
+        const propId = data.replace('APPROVE_TUNING_', '');
+        const dynamicConfig = require('../config/dynamicConfig');
+        try {
+          const prop = dynamicConfig.approveProposal(propId);
+          await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+          await ctx.reply(
+            `✅ *Strategy Config Parameter Updated!*\n\n• Parameter: \`${prop.paramKey}\`\n• New Runtime Value: *${prop.proposedValue}*\n• Changed By: \`ai_proposed_approved\`\n• Status: Active in Confluence Scorer!`,
+            { parse_mode: 'Markdown' }
+          );
+        } catch (err) {
+          await ctx.reply(`❌ Proposal Error: ${err.message}`);
+        }
+        return;
+      }
+
+      if (data.startsWith('REJECT_TUNING_')) {
+        const propId = data.replace('REJECT_TUNING_', '');
+        const dynamicConfig = require('../config/dynamicConfig');
+        dynamicConfig.rejectProposal(propId);
+        await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+        await ctx.reply('❌ *Adaptive Parameter Tuning Proposal Rejected & Discarded.*', { parse_mode: 'Markdown' });
+        return;
+      }
+
       if (data.startsWith('APPROVE_')) {
         const approvalId = data.replace('APPROVE_', '');
         const pending = this.pendingApprovals.get(approvalId);

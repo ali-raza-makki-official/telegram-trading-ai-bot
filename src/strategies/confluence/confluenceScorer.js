@@ -56,10 +56,6 @@ function scoreConfluence({
   // 5. HTF Trend Alignment: 10%
   // 6. Correlated Pairs Confirmation: 5%
 
-  const smcContribution = (smc.score || 0) * 0.30;
-  const ictContribution = (ict.score || 0) * 0.25;
-  const candleContribution = (candlesPattern.score || 0) * 0.15;
-
   let indicatorScore = 0;
   if (indicators.emaBias === 'BULLISH') indicatorScore += 40;
   else if (indicators.emaBias === 'BEARISH') indicatorScore -= 40;
@@ -70,13 +66,25 @@ function scoreConfluence({
   if (indicators.rsiCondition === 'OVERSOLD') indicatorScore += 30;
   else if (indicators.rsiCondition === 'OVERBOUGHT') indicatorScore -= 30;
 
-  const indicatorContribution = Math.max(-100, Math.min(100, indicatorScore)) * 0.15;
+  // Weight contributions dynamically loaded from DynamicConfigStore (Section 7 Spec)
+  const dynamicConfig = require('../../config/dynamicConfig');
+  const wSmc = (dynamicConfig.get('weights.smc', 30.0) || 30.0) / 100;
+  const wIct = (dynamicConfig.get('weights.ict', 25.0) || 25.0) / 100;
+  const wCandles = (dynamicConfig.get('weights.candlesticks', 20.0) || 20.0) / 100;
+  const wInd = (dynamicConfig.get('weights.indicators', 15.0) || 15.0) / 100;
+  const smtWeight = dynamicConfig.get('weights.smt_divergence', 20.0) || 20.0;
 
-  let htfContribution = 0;
-  if (htfBias === 'BULLISH') htfContribution = 10;
-  else if (htfBias === 'BEARISH') htfContribution = -10;
+  const smcContribution = (smc.score || 0) * wSmc;
+  const ictContribution = (ict.score || 0) * wIct;
+  const candleContribution = (candlesPattern.score || 0) * wCandles;
+  const indicatorContribution = indicatorScore * wInd;
+  let htfScore = 0;
+  if (htfBias === 'BULLISH') htfScore = 50;
+  else if (htfBias === 'BEARISH') htfScore = -50;
 
-  // Correlated confirmation (Gold vs DXY is inversely correlated, Gold vs Silver is positively correlated)
+  const htfContribution = htfScore * 0.15;
+
+  // Correlation & Macro Sentiment
   let correlationScore = 0;
   if (correlatedData.DXY) {
     if (correlatedData.DXY.bias === 'BEARISH' || correlatedData.DXY.change < -0.1) correlationScore += 50;
@@ -87,8 +95,8 @@ function scoreConfluence({
   const silverCandles = candlesByTimeframe['XAGUSD'] || [];
   const smt = macroEngine.detectSMTDivergence(triggerCandles, silverCandles);
   if (smt) {
-    if (smt.bias === 'BULLISH') correlationScore += 40;
-    else if (smt.bias === 'BEARISH') correlationScore -= 40;
+    if (smt.bias === 'BULLISH') correlationScore += smtWeight * 2;
+    else if (smt.bias === 'BEARISH') correlationScore -= smtWeight * 2;
   }
 
   const correlationContribution = Math.max(-100, Math.min(100, correlationScore)) * 0.10;
@@ -105,7 +113,7 @@ function scoreConfluence({
   const finalScore = Number(rawTotalScore.toFixed(1));
   const confidence = Math.min(100, Math.abs(finalScore));
 
-  const MIN_CONFLUENCE_THRESHOLD = Number(config.strategy.minConfluenceScore || 70.0);
+  const MIN_CONFLUENCE_THRESHOLD = Number(dynamicConfig.get('confluence.min_threshold', 70.0) || 70.0);
 
   let bias = 'NEUTRAL';
   if (finalScore >= 35 && confidence >= 50) bias = 'BULLISH';
