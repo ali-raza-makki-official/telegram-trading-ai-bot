@@ -40,7 +40,7 @@ class MarketFeed extends EventEmitter {
         const mockHistory = generateRealisticGoldCandles({
           count: 100,
           timeframe: tf,
-          basePrice: 2650.0,
+          basePrice: 4515.0,
           trend: 'BULLISH',
         });
         candleManager.setCandles(symbol, tf, mockHistory);
@@ -57,12 +57,14 @@ class MarketFeed extends EventEmitter {
 
       const m15Candles = candleManager.getCandles(symbol, '15m');
       const lastCandle = m15Candles[m15Candles.length - 1];
-      const prevClose = lastCandle ? lastCandle.close : 2650.0;
+      const prevClose = this.latestPrices.get(symbol) || (lastCandle ? lastCandle.close : 4515.0);
 
       // Small tick delta
       const tickDelta = (Math.random() - 0.49) * 0.4;
       const newPrice = Number((prevClose + tickDelta).toFixed(2));
       this.latestPrices.set(symbol, newPrice);
+      this.latestPrices.set('XAUUSD', newPrice);
+      this.latestPrices.set('XAUUSDm', newPrice);
 
       // Emit tick
       this.emit('tick', {
@@ -78,7 +80,7 @@ class MarketFeed extends EventEmitter {
       return this.latestPrices.get(symbol);
     }
     const candles = candleManager.getCandles(symbol, '15m');
-    return candles.length > 0 ? candles[candles.length - 1].close : 2650.0;
+    return candles.length > 0 ? candles[candles.length - 1].close : 4518.50;
   }
 
   getCorrelatedData() {

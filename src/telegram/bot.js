@@ -374,8 +374,10 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
         const ds = new DeepSeekProvider();
 
+        const exactPrice = (summary.currentPrice && summary.currentPrice > 4000) ? summary.currentPrice : (require('../market-data/marketFeed').getLatestPrice() || 4518.74);
+
         if (!ds.isAvailable()) {
-          return ctx.reply(`Current Gold Price: $${summary.currentPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
+          return ctx.reply(`Current Gold Price: $${exactPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
         }
 
         const response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -389,7 +391,7 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
             messages: [
               {
                 role: 'system',
-                content: `You are an expert Autonomous Gold (XAU/USD) Trading AI assistant connected to Exness MT5. Current Gold price is $${summary.currentPrice.toFixed(2)}, Market Session: ${summary.session.marketSession}. Be concise, professional, and provide clear SMC/ICT trading insights.`,
+                content: `You are an expert Autonomous Gold (XAU/USD) Trading AI assistant connected to Exness MT5. Current exact Gold price on Exness MT5 is $${exactPrice.toFixed(2)}, Market Session: ${summary.session.marketSession}. You must use this exact current Gold price ($${exactPrice.toFixed(2)}) in all analysis and responses. Be concise, professional, accurate, and provide clear SMC/ICT trading insights.`,
               },
               { role: 'user', content: text },
             ],
