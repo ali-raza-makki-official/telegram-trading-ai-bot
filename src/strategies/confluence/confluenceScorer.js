@@ -1,3 +1,4 @@
+const config = require('../../config');
 const { computeAllIndicators } = require('../../indicators');
 const { analyzeSMC } = require('../smc');
 const { analyzeICT } = require('../ict');

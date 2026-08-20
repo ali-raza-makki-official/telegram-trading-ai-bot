@@ -63,10 +63,11 @@ class MacroEngine {
 
   // Detect Smart Money Technique (SMT) Divergence between Gold and Silver
   detectSMTDivergence(goldCandles = [], silverCandles = []) {
-    if (goldCandles.length < 5 || silverCandles.length < 5) return null;
+    if (goldCandles.length < 3 || silverCandles.length < 3) return null;
 
-    const gRecent = goldCandles.slice(-5);
-    const sRecent = silverCandles.slice(-5);
+    const count = Math.min(5, Math.min(goldCandles.length, silverCandles.length));
+    const gRecent = goldCandles.slice(-count);
+    const sRecent = silverCandles.slice(-count);
 
     const gHigherHigh = gRecent[gRecent.length - 1].high > gRecent[0].high;
     const sHigherHigh = sRecent[sRecent.length - 1].high > sRecent[0].high;
