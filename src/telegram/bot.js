@@ -523,46 +523,88 @@ ${thesis.reasoning}
         );
       }
 
-      // Intelligent Conversational AI Reasoner with Dynamic UI generation
-      await ctx.reply('💭 *Analyzing market context & synthesizing intelligent response with DeepSeek AI...*', { parse_mode: 'Markdown' });
+      // Intelligent Conversational AI Reasoner with Full Institutional Memory & Technical Matrix
+      await ctx.reply('💭 *Analyzing institutional multi-timeframe structure, memory & market context with DeepSeek AI...*', { parse_mode: 'Markdown' });
       try {
-        const summary = await this.orchestrator.getStatusSummary();
+        const AgentMemory = require('../memory/agentMemory');
+        AgentMemory.addChatMessage(ctx.chat.id, 'user', text);
+
+        const fullContext = await AgentMemory.buildFullContext({
+          chatId: ctx.chat.id,
+          orchestrator: this.orchestrator,
+          primarySymbol: config.system.primarySymbol,
+        });
+
         const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
         const ds = new DeepSeekProvider();
 
         if (!ds.isAvailable()) {
           const kb = new InlineKeyboard()
-            .text('🔍 Analyze 15m', 'ACTION:ANALYZE_15m')
-            .text('💼 Status', 'ACTION:STATUS');
-          return ctx.reply(`Current Gold Price: $${exactPrice.toFixed(2)}\nSession: ${summary.session.marketSession}`, { reply_markup: kb });
+            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
+            .text('💼 Account Status', 'ACTION:STATUS');
+          return ctx.reply(`Current Gold Price: $${fullContext.livePrice.toFixed(2)}\nSession: ${fullContext.marketSession.sessionName}`, { reply_markup: kb });
         }
 
         const systemPrompt = `
-You are an expert Autonomous Gold (XAU/USD) Trading AI Copilot chatting with user Ali Raza in Telegram.
-Current Market Context:
-- Exact Current Gold Price on Exness MT5: $${exactPrice.toFixed(2)} USD (MUST use this exact price).
-- Market Session: ${summary.session.marketSession}
-- Broker: Exness MT5 (Trial16), Account Balance: $${Number(summary.account.balance).toFixed(2)} USD.
+You are an Elite Institutional Gold (XAU/USD) Trading AI Agent & Copilot chatting with user Ali Raza in Telegram.
+You have complete knowledge of technical indicators, SMC/ICT concepts, multi-timeframe levels, broker account data, trade performance history, and past chat memory.
 
-Your Goal:
-Respond in a friendly, conversational, and highly intelligent trading manner (in Roman Urdu / Urdu or English based on user's query).
-You have full awareness of Telegram UI buttons and actions!
-Always return a valid JSON object with the following schema:
+===================================================================
+1. REAL-TIME BROKER ACCOUNT (EXNESS MT5)
+===================================================================
+- Live Spot Gold Price: $${fullContext.livePrice.toFixed(2)} USD (STRICT: Use this exact quote).
+- Balance: $${Number(fullContext.broker.balance).toFixed(2)} USD
+- Equity: $${Number(fullContext.broker.equity).toFixed(2)} USD | Free Margin: $${Number(fullContext.broker.freeMargin).toFixed(2)} USD
+- Floating PnL: $${Number(fullContext.broker.floatingPnl).toFixed(2)} USD
+- Leverage: ${fullContext.broker.leverage} | Active Open Positions: ${fullContext.openPositions.length}
+- Positions Details: ${JSON.stringify(fullContext.openPositions)}
+
+===================================================================
+2. MULTI-TIMEFRAME TECHNICAL, INDICATORS & SMC MATRIX (1W to 5m)
+===================================================================
+${JSON.stringify(fullContext.technicalMatrix, null, 2)}
+- Macro Correlations: DXY: ${fullContext.macroCorrelations.DXY?.price} (${fullContext.macroCorrelations.DXY?.bias}), Silver: $${fullContext.macroCorrelations.XAGUSD?.price} (${fullContext.macroCorrelations.XAGUSD?.bias})
+- Market Session: ${fullContext.marketSession.sessionName} (${fullContext.marketSession.killzone})
+
+===================================================================
+3. TRADE PERFORMANCE & HISTORICAL MEMORY
+===================================================================
+- Win Rate: ${fullContext.tradeHistory.winRate}% | Total Predictions: ${fullContext.tradeHistory.totalPredictions}
+- Recent Wins: ${fullContext.tradeHistory.recentWins} | Recent Losses: ${fullContext.tradeHistory.recentLosses} | Break-Evens: ${fullContext.tradeHistory.recentBreakEvens}
+- Recent Realized PnL: $${fullContext.tradeHistory.recentRealizedPnL} USD
+- Last Closed Trades: ${JSON.stringify(fullContext.tradeHistory.lastTrades)}
+
+===================================================================
+4. RECENT CHAT MEMORY CONTEXT
+===================================================================
+${JSON.stringify(fullContext.recentChat)}
+
+===================================================================
+BEHAVIORAL & TONE GUIDELINES
+===================================================================
+1. Personality: Highly professional, sharp institutional hedge-fund trader demeanor.
+2. Language: Fluent Roman Urdu / Urdu (or English if queried in English).
+3. Emoji Discipline: Use minimal, clean, professional emojis only (e.g. ⚜️, 📊, 📈, 📉, ⚡, 🛡️, ⚖️). Absolutely NO spammy or cartoonish emojis.
+4. Deep Analysis: Explain multi-timeframe alignment (Weekly macro trend, Daily levels PDH/PDL, 4h/1h order blocks & FVGs, 15m/5m entry triggers).
+5. Never forget past discussion, recent losses/profits, or account balance.
+
+Return valid JSON with schema:
 {
-  "reply": "Your intelligent markdown response explaining market context, price action, SMC/ICT structure, or answering their question clearly.",
+  "reply": "Clear, professional markdown formatted response addressing the user's question directly with exact levels, indicators, and SMC logic.",
   "trade_suggestion": {
-    "recommended": boolean, // true if you advise a specific trade right now
-    "type": "BUY" or "SELL",
+    "recommended": boolean,
+    "type": "BUY" | "SELL" | null,
     "lot": 0.01,
     "entry": number,
     "sl": number,
-    "tp": number
+    "tp": number,
+    "rr": string
   },
   "interactive_buttons": [
     { "text": "Button Label", "action": "ACTION:ANALYZE_15m" | "ACTION:ANALYZE_1h" | "ACTION:STATUS" | "ACTION:POSITIONS" | "TRADE:BUY:0.01:SL:TP" | "TRADE:SELL:0.01:SL:TP" }
   ]
 }
-Always provide 2 to 4 relevant interactive buttons so the user can easily tap actions, execute trades, or choose timeframes!
+Always provide 2 to 4 actionable buttons for effortless user interaction!
 `;
 
         const response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -578,8 +620,8 @@ Always provide 2 to 4 relevant interactive buttons so the user can easily tap ac
               { role: 'user', content: text },
             ],
             response_format: { type: 'json_object' },
-            temperature: 0.3,
-            max_tokens: 1000,
+            temperature: 0.2,
+            max_tokens: 1200,
           }),
         });
 
@@ -593,15 +635,17 @@ Always provide 2 to 4 relevant interactive buttons so the user can easily tap ac
             parsed = { reply: content, interactive_buttons: [] };
           }
 
+          AgentMemory.addChatMessage(ctx.chat.id, 'assistant', parsed.reply);
+
           let kb = new InlineKeyboard();
 
           // 1. If AI recommended a trade, add prominent 1-click execution button
           if (parsed.trade_suggestion && parsed.trade_suggestion.recommended && parsed.trade_suggestion.type) {
             const t = parsed.trade_suggestion;
             const tType = t.type.toUpperCase();
-            const slVal = t.sl ? t.sl.toFixed(1) : (tType === 'BUY' ? (exactPrice - 12).toFixed(1) : (exactPrice + 12).toFixed(1));
-            const tpVal = t.tp ? t.tp.toFixed(1) : (tType === 'BUY' ? (exactPrice + 25).toFixed(1) : (exactPrice - 25).toFixed(1));
-            kb.text(`⚡ Execute ${tType} @ $${exactPrice.toFixed(1)} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${t.lot || 0.01}:${slVal}:${tpVal}`).row();
+            const slVal = t.sl ? t.sl.toFixed(1) : (tType === 'BUY' ? (fullContext.livePrice - 12).toFixed(1) : (fullContext.livePrice + 12).toFixed(1));
+            const tpVal = t.tp ? t.tp.toFixed(1) : (tType === 'BUY' ? (fullContext.livePrice + 25).toFixed(1) : (fullContext.livePrice - 25).toFixed(1));
+            kb.text(`⚡ Execute ${tType} @ $${fullContext.livePrice.toFixed(1)} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${t.lot || 0.01}:${slVal}:${tpVal}`).row();
           }
 
           // 2. Add dynamic interactive buttons returned by DeepSeek
@@ -613,7 +657,6 @@ Always provide 2 to 4 relevant interactive buttons so the user can easily tap ac
               if (rowCount % 2 === 0) kb.row();
             }
           } else {
-            // Default fallback interactive keyboard
             kb.row()
               .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
               .text('📈 1h Trend', 'ACTION:ANALYZE_1h').row()
@@ -626,7 +669,7 @@ Always provide 2 to 4 relevant interactive buttons so the user can easily tap ac
           const kb = new InlineKeyboard()
             .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
             .text('💼 Account Status', 'ACTION:STATUS');
-          await ctx.reply(`⚜️ *Gold Market Price:* \`$${exactPrice.toFixed(2)} USD\`\n• Session: *${summary.session.marketSession}*`, { parse_mode: 'Markdown', reply_markup: kb });
+          await ctx.reply(`⚜️ *Gold Market Price:* \`$${fullContext.livePrice.toFixed(2)} USD\`\n• Session: *${fullContext.marketSession.sessionName}*`, { parse_mode: 'Markdown', reply_markup: kb });
         }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed handling text message');
