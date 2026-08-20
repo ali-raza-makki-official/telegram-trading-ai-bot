@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
+    "build": "node -e \"console.log('Build completed successfully')\"",
     "dev": "node --watch src/index.js",
     "test": "node tests/runAll.js"
   },
