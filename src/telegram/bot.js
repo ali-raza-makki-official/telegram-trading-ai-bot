@@ -636,27 +636,59 @@ Return valid JSON with schema:
 Always provide 2 to 4 actionable buttons for effortless user interaction!
 `;
 
-        const response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+        const dsPayload = {
+          model: config.llm.deepseek.model || 'deepseek-v4-pro',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text },
+          ],
+          response_format: { type: 'json_object' },
+          stream: false,
+        };
+
+        if (config.llm.deepseek.thinkingMode) {
+          dsPayload.thinking = { type: 'enabled' };
+          dsPayload.reasoning_effort = config.llm.deepseek.reasoningEffort || 'high';
+        } else {
+          dsPayload.temperature = 0.2;
+        }
+
+        let response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${ds.apiKey}`,
           },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: text },
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.2,
-            max_tokens: 1200,
-          }),
+          body: JSON.stringify(dsPayload),
         });
+
+        // Fallback for standard completions endpoint if needed
+        if (!response.ok && (response.status === 400 || response.status === 404)) {
+          logger.warn({ status: response.status }, 'Falling back DeepSeek chat request to deepseek-chat format...');
+          response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${ds.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: text },
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.2,
+            }),
+          });
+        }
 
         if (response.ok) {
           const data = await response.json();
-          const content = data.choices?.[0]?.message?.content || '{}';
+          const msg = data.choices?.[0]?.message || {};
+          const content = msg.content || '{}';
+          const reasoningContent = msg.reasoning_content || null;
+
           let parsed;
           try {
             parsed = JSON.parse(content);
