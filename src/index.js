@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const chalk = require('chalk');
 const orchestrator = require('./orchestrator/agentOrchestrator');
 const config = require('./config');
