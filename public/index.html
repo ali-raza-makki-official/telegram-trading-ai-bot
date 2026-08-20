@@ -63,7 +63,7 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 20px;
       margin-bottom: 24px;
     }
@@ -95,16 +95,19 @@
       margin-top: 6px;
     }
     .telegram-box {
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
-      border: 1px solid #2563eb40;
-      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 14px;
       padding: 24px;
       margin-bottom: 24px;
+    }
+    .telegram-header {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
+      margin-bottom: 16px;
     }
     .telegram-info h2 {
       font-size: 1.25rem;
@@ -133,8 +136,7 @@
     .btn:hover { background: #2563eb; transform: translateY(-1px); }
     .btn-gold { background: var(--primary); color: #000; }
     .btn-gold:hover { background: var(--primary-hover); }
-    .btn-danger { background: var(--danger); }
-    .btn-danger:hover { background: #dc2626; }
+    .btn-block { width: 100%; justify-content: center; }
     .actions-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -161,7 +163,6 @@
       border-radius: 6px;
       font-family: inherit;
     }
-    .btn-block { width: 100%; justify-content: center; }
     pre {
       background: #090d16;
       border: 1px solid #1e293b;
@@ -194,14 +195,17 @@
       text-align: center;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     }
-    .modal-card h2 {
-      color: var(--primary);
-      margin-bottom: 8px;
-    }
-    .modal-card p {
-      color: var(--text-muted);
-      font-size: 0.875rem;
-      margin-bottom: 20px;
+    .modal-card h2 { color: var(--primary); margin-bottom: 8px; }
+    .modal-card p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 20px; }
+    .pair-badge {
+      background: #0f172a;
+      border: 1px dashed var(--accent);
+      padding: 14px;
+      border-radius: 8px;
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
   </style>
 </head>
@@ -228,21 +232,39 @@
         <div class="badge">● LIVE SYSTEM ACTIVE</div>
       </div>
       <div>
-        <span style="color:var(--text-muted);font-size:0.85rem;">Engine: <strong>METAAPI CLOUD</strong></span>
+        <span style="color:var(--text-muted);font-size:0.85rem;">Execution: <strong>METAAPI (EXNESS MT5)</strong></span>
       </div>
     </header>
 
-    <!-- Telegram Quick Connect Card -->
+    <!-- Telegram 1-Click Verification Hub -->
     <div class="telegram-box">
-      <div class="telegram-info">
-        <h2>📱 Telegram Bot Control Hub</h2>
-        <p id="telegramStatusText">Connecting status with Telegram...</p>
-        <p style="margin-top:4px;font-size:0.8rem;color:#cbd5e1;">Master Command: Send <code>/auth ALirazamakki12@</code> inside Telegram</p>
+      <div class="telegram-header">
+        <div class="telegram-info">
+          <h2>📱 Telegram Instant Connect & Verification</h2>
+          <p id="telegramStatusText">Connecting status with Telegram...</p>
+        </div>
+        <div>
+          <button class="btn btn-gold" onclick="generateTelegramLink()">
+            🔗 Generate 1-Click Telegram Pairing Link
+          </button>
+        </div>
       </div>
-      <div>
-        <a id="tgDirectBtn" href="https://t.me/XAUUSD_Trading_AI_Agent_bot" target="_blank" class="btn btn-gold">
-          🚀 Open Bot in Telegram
-        </a>
+
+      <div id="pairingContainer" class="pair-badge" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div>
+            <span style="color:var(--text-muted);font-size:0.85rem;">Generated Secure Token:</span>
+            <strong id="displayToken" style="font-family:'JetBrains Mono';color:var(--primary);margin-left:6px;font-size:1.1rem;">AUTH_XXXXXX</strong>
+          </div>
+          <div>
+            <a id="tgOneClickBtn" href="#" target="_blank" class="btn" style="background:#0ea5e9;">
+              🚀 Open & Confirm in Telegram
+            </a>
+          </div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+          <span id="pairPollingStatus">⏳ Waiting for confirmation in Telegram...</span>
+        </div>
       </div>
     </div>
 
@@ -314,6 +336,8 @@
 
   <script>
     const MASTER_PASS = "ALirazamakki12@";
+    let activeToken = null;
+    let pollInterval = null;
 
     function verifyPassword() {
       const input = document.getElementById('adminPasswordInput').value;
@@ -332,6 +356,44 @@
       verifyPassword();
     }
 
+    async function generateTelegramLink() {
+      try {
+        const res = await fetch('/api/telegram/generate-auth-link', { method: 'POST' });
+        const data = await res.json();
+        if (data.token) {
+          activeToken = data.token;
+          document.getElementById('pairingContainer').style.display = 'flex';
+          document.getElementById('displayToken').innerText = data.token;
+          document.getElementById('tgOneClickBtn').href = data.url;
+          document.getElementById('pairPollingStatus').innerText = '⏳ Token generated! Click the button above to confirm in Telegram.';
+          
+          if (pollInterval) clearInterval(pollInterval);
+          pollInterval = setInterval(checkPairingStatus, 3000);
+          return;
+        }
+      } catch (err) {}
+
+      // Fallback direct link
+      const fallbackToken = 'AUTH_' + Math.floor(100000 + Math.random() * 900000);
+      document.getElementById('pairingContainer').style.display = 'flex';
+      document.getElementById('displayToken').innerText = fallbackToken;
+      document.getElementById('tgOneClickBtn').href = 'https://t.me/XAUUSD_Trading_AI_Agent_bot?start=' + fallbackToken;
+      document.getElementById('pairPollingStatus').innerHTML = 'Or send: <code>/auth ' + MASTER_PASS + '</code> in Telegram';
+    }
+
+    async function checkPairingStatus() {
+      if (!activeToken) return;
+      try {
+        const res = await fetch('/api/telegram/check-auth?token=' + activeToken);
+        const data = await res.json();
+        if (data.claimed) {
+          document.getElementById('pairPollingStatus').innerHTML = '🎉 <strong style="color:var(--success)">Master Admin Verified! (Chat ID: ' + data.chatId + ')</strong>';
+          document.getElementById('telegramStatusText').innerHTML = '✅ <strong>Admin Paired!</strong> Chat ID: <code>' + data.chatId + '</code>';
+          clearInterval(pollInterval);
+        }
+      } catch (err) {}
+    }
+
     async function fetchStatus() {
       try {
         const res = await fetch('/api/status');
@@ -345,7 +407,7 @@
         if (data.telegramAdmin) {
           document.getElementById('telegramStatusText').innerHTML = '✅ <strong>Admin Paired!</strong> Chat ID: <code>' + data.telegramAdmin + '</code>';
         } else {
-          document.getElementById('telegramStatusText').innerHTML = '⚠️ <strong>Not Paired:</strong> Send <code>/auth ALirazamakki12@</code> in Telegram';
+          document.getElementById('telegramStatusText').innerHTML = '⚠️ <strong>Not Paired:</strong> Send <code>/auth ' + MASTER_PASS + '</code> in Telegram or click Generate Link above';
         }
       } catch (err) {}
     }
@@ -362,7 +424,7 @@
         }
       } catch (e) {}
 
-      // Direct DeepSeek AI Cloud fallback for static hosting
+      // Direct DeepSeek AI Cloud fallback
       try {
         const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',

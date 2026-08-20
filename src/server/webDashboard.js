@@ -1,27 +1,50 @@
-const http = require('http');
+const crypto = require('crypto');
 const config = require('../config');
 const { SettingsRepo } = require('../database');
 const logger = require('../utils/logger');
-const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
 
-// In-memory active pairing codes: code -> timestamp
-const activePairCodes = new Map();
+// In-memory active authentication tokens: token -> { expiresAt, claimed, chatId, username }
+const authTokens = new Map();
 
-function generatePairCode() {
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  activePairCodes.set(code, Date.now() + 10 * 60 * 1000); // 10 min validity
-  return code;
+function generateAuthToken(botUsername = 'XAUUSD_Trading_AI_Agent_bot') {
+  const randomHex = crypto.randomBytes(6).toString('hex').toUpperCase();
+  const token = `AUTH_${randomHex}`;
+  const record = {
+    token,
+    expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+    claimed: false,
+    chatId: null,
+    username: null,
+  };
+  authTokens.set(token, record);
+  return {
+    token,
+    url: `https://t.me/${botUsername}?start=${token}`,
+    expiresAt: record.expiresAt,
+  };
 }
 
-function verifyPairCode(code) {
-  if (!code) return false;
-  const clean = code.replace(/^PAIR_/, '').trim();
-  const exp = activePairCodes.get(clean);
-  if (exp && exp > Date.now()) {
-    activePairCodes.delete(clean);
+function claimAuthToken(token, chatId, username = '') {
+  if (!token) return false;
+  const clean = token.trim();
+  const record = authTokens.get(clean);
+  if (record && record.expiresAt > Date.now() && !record.claimed) {
+    record.claimed = true;
+    record.chatId = chatId;
+    record.username = username;
     return true;
   }
   return false;
+}
+
+function getAuthTokenStatus(token) {
+  if (!token) return { valid: false, claimed: false };
+  const record = authTokens.get(token.trim());
+  if (!record) return { valid: false, claimed: false };
+  if (record.expiresAt < Date.now()) {
+    return { valid: false, expired: true, claimed: record.claimed };
+  }
+  return { valid: true, claimed: record.claimed, chatId: record.chatId, username: record.username };
 }
 
 function getDashboardHtml() {
@@ -90,7 +113,7 @@ function getDashboardHtml() {
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 20px;
       margin-bottom: 24px;
     }
@@ -122,16 +145,19 @@ function getDashboardHtml() {
       margin-top: 6px;
     }
     .telegram-box {
-      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
-      border: 1px solid #2563eb40;
-      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.95));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 14px;
       padding: 24px;
       margin-bottom: 24px;
+    }
+    .telegram-header {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
+      margin-bottom: 16px;
     }
     .telegram-info h2 {
       font-size: 1.25rem;
@@ -160,8 +186,7 @@ function getDashboardHtml() {
     .btn:hover { background: #2563eb; transform: translateY(-1px); }
     .btn-gold { background: var(--primary); color: #000; }
     .btn-gold:hover { background: var(--primary-hover); }
-    .btn-danger { background: var(--danger); }
-    .btn-danger:hover { background: #dc2626; }
+    .btn-block { width: 100%; justify-content: center; }
     .actions-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -188,7 +213,6 @@ function getDashboardHtml() {
       border-radius: 6px;
       font-family: inherit;
     }
-    .btn-block { width: 100%; justify-content: center; }
     pre {
       background: #090d16;
       border: 1px solid #1e293b;
@@ -221,14 +245,17 @@ function getDashboardHtml() {
       text-align: center;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     }
-    .modal-card h2 {
-      color: var(--primary);
-      margin-bottom: 8px;
-    }
-    .modal-card p {
-      color: var(--text-muted);
-      font-size: 0.875rem;
-      margin-bottom: 20px;
+    .modal-card h2 { color: var(--primary); margin-bottom: 8px; }
+    .modal-card p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 20px; }
+    .pair-badge {
+      background: #0f172a;
+      border: 1px dashed var(--accent);
+      padding: 14px;
+      border-radius: 8px;
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
   </style>
 </head>
@@ -255,21 +282,39 @@ function getDashboardHtml() {
         <div class="badge">● LIVE SYSTEM ACTIVE</div>
       </div>
       <div>
-        <span style="color:var(--text-muted);font-size:0.85rem;">Engine: <strong>METAAPI CLOUD</strong></span>
+        <span style="color:var(--text-muted);font-size:0.85rem;">Execution: <strong>METAAPI (EXNESS MT5)</strong></span>
       </div>
     </header>
 
-    <!-- Telegram Quick Connect Card -->
+    <!-- Telegram 1-Click Verification Hub -->
     <div class="telegram-box">
-      <div class="telegram-info">
-        <h2>📱 Telegram Bot Control Hub</h2>
-        <p id="telegramStatusText">Connecting status with Telegram...</p>
-        <p style="margin-top:4px;font-size:0.8rem;color:#cbd5e1;">Master Command: Send <code>/auth ALirazamakki12@</code> inside Telegram</p>
+      <div class="telegram-header">
+        <div class="telegram-info">
+          <h2>📱 Telegram Instant Connect & Verification</h2>
+          <p id="telegramStatusText">Connecting status with Telegram...</p>
+        </div>
+        <div>
+          <button class="btn btn-gold" onclick="generateTelegramLink()">
+            🔗 Generate 1-Click Telegram Pairing Link
+          </button>
+        </div>
       </div>
-      <div>
-        <a id="tgDirectBtn" href="https://t.me/XAUUSD_Trading_AI_Agent_bot" target="_blank" class="btn btn-gold">
-          🚀 Open Bot in Telegram
-        </a>
+
+      <div id="pairingContainer" class="pair-badge" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div>
+            <span style="color:var(--text-muted);font-size:0.85rem;">Generated Secure Token:</span>
+            <strong id="displayToken" style="font-family:'JetBrains Mono';color:var(--primary);margin-left:6px;font-size:1.1rem;">AUTH_XXXXXX</strong>
+          </div>
+          <div>
+            <a id="tgOneClickBtn" href="#" target="_blank" class="btn" style="background:#0ea5e9;">
+              🚀 Open & Confirm in Telegram
+            </a>
+          </div>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+          <span id="pairPollingStatus">⏳ Waiting for confirmation in Telegram...</span>
+        </div>
       </div>
     </div>
 
@@ -341,6 +386,8 @@ function getDashboardHtml() {
 
   <script>
     const MASTER_PASS = "ALirazamakki12@";
+    let activeToken = null;
+    let pollInterval = null;
 
     function verifyPassword() {
       const input = document.getElementById('adminPasswordInput').value;
@@ -359,6 +406,44 @@ function getDashboardHtml() {
       verifyPassword();
     }
 
+    async function generateTelegramLink() {
+      try {
+        const res = await fetch('/api/telegram/generate-auth-link', { method: 'POST' });
+        const data = await res.json();
+        if (data.token) {
+          activeToken = data.token;
+          document.getElementById('pairingContainer').style.display = 'flex';
+          document.getElementById('displayToken').innerText = data.token;
+          document.getElementById('tgOneClickBtn').href = data.url;
+          document.getElementById('pairPollingStatus').innerText = '⏳ Token generated! Click the button above to confirm in Telegram.';
+          
+          if (pollInterval) clearInterval(pollInterval);
+          pollInterval = setInterval(checkPairingStatus, 3000);
+          return;
+        }
+      } catch (err) {}
+
+      // Fallback direct link
+      const fallbackToken = 'AUTH_' + Math.floor(100000 + Math.random() * 900000);
+      document.getElementById('pairingContainer').style.display = 'flex';
+      document.getElementById('displayToken').innerText = fallbackToken;
+      document.getElementById('tgOneClickBtn').href = 'https://t.me/XAUUSD_Trading_AI_Agent_bot?start=' + fallbackToken;
+      document.getElementById('pairPollingStatus').innerHTML = 'Or send: <code>/auth ' + MASTER_PASS + '</code> in Telegram';
+    }
+
+    async function checkPairingStatus() {
+      if (!activeToken) return;
+      try {
+        const res = await fetch('/api/telegram/check-auth?token=' + activeToken);
+        const data = await res.json();
+        if (data.claimed) {
+          document.getElementById('pairPollingStatus').innerHTML = '🎉 <strong style="color:var(--success)">Master Admin Verified! (Chat ID: ' + data.chatId + ')</strong>';
+          document.getElementById('telegramStatusText').innerHTML = '✅ <strong>Admin Paired!</strong> Chat ID: <code>' + data.chatId + '</code>';
+          clearInterval(pollInterval);
+        }
+      } catch (err) {}
+    }
+
     async function fetchStatus() {
       try {
         const res = await fetch('/api/status');
@@ -372,7 +457,7 @@ function getDashboardHtml() {
         if (data.telegramAdmin) {
           document.getElementById('telegramStatusText').innerHTML = '✅ <strong>Admin Paired!</strong> Chat ID: <code>' + data.telegramAdmin + '</code>';
         } else {
-          document.getElementById('telegramStatusText').innerHTML = '⚠️ <strong>Not Paired:</strong> Send <code>/auth ALirazamakki12@</code> in Telegram';
+          document.getElementById('telegramStatusText').innerHTML = '⚠️ <strong>Not Paired:</strong> Send <code>/auth ' + MASTER_PASS + '</code> in Telegram or click Generate Link above';
         }
       } catch (err) {}
     }
@@ -389,7 +474,7 @@ function getDashboardHtml() {
         }
       } catch (e) {}
 
-      // Direct DeepSeek AI Cloud fallback for static hosting
+      // Direct DeepSeek AI Cloud fallback
       try {
         const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
@@ -450,16 +535,17 @@ function getDashboardHtml() {
 
 // Router for HTTP Server & Dashboard
 function handleDashboardRequest(req, res, orchestrator) {
-  const url = req.url;
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const pathname = parsedUrl.pathname;
 
   // 1. Health Check
-  if (url === '/health') {
+  if (pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
   }
 
   // 2. Status API
-  if (url === '/api/status') {
+  if (pathname === '/api/status') {
     const primarySym = config.system.primarySymbol;
     const price = require('../market-data/marketFeed').getLatestPrice(primarySym) || 2685.50;
     const session = require('../strategies/ict/killzones').getCurrentSessionInfo();
@@ -483,8 +569,23 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 3. DeepSeek Analysis API
-  if (url === '/api/analyze') {
+  // 3. Generate Telegram Auth Link API
+  if (pathname === '/api/telegram/generate-auth-link' && req.method === 'POST') {
+    const data = generateAuthToken('XAUUSD_Trading_AI_Agent_bot');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(data));
+  }
+
+  // 4. Check Telegram Auth Status API
+  if (pathname === '/api/telegram/check-auth') {
+    const token = parsedUrl.searchParams.get('token');
+    const status = getAuthTokenStatus(token);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify(status));
+  }
+
+  // 5. DeepSeek Analysis API
+  if (pathname === '/api/analyze') {
     orchestrator.runOnDemandAnalysis('XAUUSD', '15m').then(thesis => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(thesis));
@@ -495,8 +596,8 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 4. Trade Execution API
-  if (url === '/api/trade/execute' && req.method === 'POST') {
+  // 6. Trade Execution API
+  if (pathname === '/api/trade/execute' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
@@ -525,7 +626,7 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 5. Default: Render Web Dashboard HTML
+  // 7. Default: Render Web Dashboard HTML
   res.writeHead(200, { 'Content-Type': 'text/html' });
   res.end(getDashboardHtml());
 }
@@ -533,6 +634,7 @@ function handleDashboardRequest(req, res, orchestrator) {
 module.exports = {
   getDashboardHtml,
   handleDashboardRequest,
-  generatePairCode,
-  verifyPairCode,
+  generateAuthToken,
+  claimAuthToken,
+  getAuthTokenStatus,
 };

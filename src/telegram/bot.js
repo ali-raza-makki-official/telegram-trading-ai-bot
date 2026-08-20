@@ -81,12 +81,13 @@ class TelegramBotService {
     // /start
     this.bot.command('start', async (ctx) => {
       const payload = ctx.match?.trim();
-      const { verifyPairCode } = require('../server/webDashboard');
+      const { claimAuthToken } = require('../server/webDashboard');
 
-      if (payload && (verifyPairCode(payload) || payload === config.telegram.adminPassword)) {
+      if (payload && (claimAuthToken(payload, ctx.chat.id, ctx.from?.username) || payload === config.telegram.adminPassword)) {
         this.adminChatId = ctx.chat.id;
         await SettingsRepo.set('admin_chat_id', ctx.chat.id);
-        await ctx.reply(`🎉 *Web Portal Paired Successfully!*\nYou are now registered as Master Admin.`, { parse_mode: 'Markdown' });
+        logger.info({ adminChatId: this.adminChatId, payload }, 'Verified Master Admin via deep link token');
+        await ctx.reply(`🎉 *Web Portal Paired & Verified!*\nYour Telegram account is now securely linked to the Web Dashboard as Master Admin.`, { parse_mode: 'Markdown' });
       } else if (!this.adminChatId && ctx.chat?.id) {
         this.adminChatId = ctx.chat.id;
         await SettingsRepo.set('admin_chat_id', ctx.chat.id);
