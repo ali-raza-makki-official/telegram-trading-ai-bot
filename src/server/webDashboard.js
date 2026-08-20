@@ -322,8 +322,8 @@ function getDashboardHtml() {
     <div class="grid">
       <div class="card">
         <h3>Live Gold Price (XAU/USD)</h3>
-        <div class="metric gold" id="goldPrice">$2,685.50</div>
-        <div class="subtext">Exness Cloud WebSocket Stream</div>
+        <div class="metric gold" id="goldPrice">$4,511.75</div>
+        <div class="subtext">Exness Cloud WebSocket Stream (XAUUSDm)</div>
       </div>
       <div class="card">
         <h3>Broker Account Balance</h3>

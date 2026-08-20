@@ -41,8 +41,18 @@ class AgentOrchestrator {
       await paperTrading.init();
     } else if (this.executionMode === 'metaapi') {
       await metaApiClient.connect();
-      metaApiClient.on('tick', ({ symbol, price }) => {
-        marketFeed.latestPrices.set(symbol, price);
+      const initialPrice = await metaApiClient.getLivePrice();
+      if (initialPrice) {
+        marketFeed.latestPrices.set(this.primarySymbol, initialPrice.bid);
+        marketFeed.latestPrices.set('XAUUSD', initialPrice.bid);
+        marketFeed.latestPrices.set('XAUUSDm', initialPrice.bid);
+      }
+      metaApiClient.on('tick', ({ symbol, price, bid }) => {
+        const live = price || bid;
+        marketFeed.latestPrices.set(symbol, live);
+        marketFeed.latestPrices.set(this.primarySymbol, live);
+        marketFeed.latestPrices.set('XAUUSD', live);
+        marketFeed.latestPrices.set('XAUUSDm', live);
       });
     } else if (this.executionMode === 'mt5') {
       mt5Bridge.connect();

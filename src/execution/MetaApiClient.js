@@ -136,6 +136,24 @@ class MetaApiClient extends EventEmitter {
     return requested;
   }
 
+  async getLivePrice(symbol = config.system.primarySymbol) {
+    if (!this.rpcConnection) return null;
+    try {
+      const resolved = this.resolveSymbol(symbol);
+      const price = await this.rpcConnection.getSymbolPrice(resolved);
+      return {
+        symbol: resolved,
+        price: price.bid,
+        bid: price.bid,
+        ask: price.ask,
+        timestamp: Date.now(),
+      };
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Failed to fetch live symbol price from MetaApi');
+      return null;
+    }
+  }
+
   async getAccountSummary() {
     if (!this.isConnected) {
       return {
