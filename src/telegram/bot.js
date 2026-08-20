@@ -82,7 +82,7 @@ class TelegramBotService {
         );
       } else {
         await ctx.reply(
-          `❌ *Invalid Password!*\n\nPlease use: \`/auth ALirazamakki12@\``,
+          `❌ *Invalid Password!*\n\nPlease use: \`/auth [your_admin_password]\``,
           { parse_mode: 'Markdown' }
         );
       }
@@ -109,7 +109,7 @@ class TelegramBotService {
 Welcome Ali Raza! I am your AI-powered trading copilot analyzing market structure, SMC, ICT killzones, and candlestick patterns.
 
 🔐 *Admin Security:*
-If prompted for password, send: \`/auth ALirazamakki12@\`
+If prompted for password, send: \`/auth [your_admin_password]\`
 
 📋 *Available Commands:*
 • /status — System health, open positions & market bias

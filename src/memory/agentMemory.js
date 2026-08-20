@@ -47,11 +47,17 @@ class AgentMemory {
       const currentCandle = candles[candles.length - 1];
       const prevCandle = candles[candles.length - 2];
 
-      const ema20 = calculateEMA(closes, 20);
-      const ema50 = calculateEMA(closes, 50);
-      const ema200 = calculateEMA(closes, Math.min(200, closes.length - 1));
-      const rsi = calculateRSI(closes, 14);
-      const atr = calculateATR(candles, 14);
+      const rawEma20 = calculateEMA(closes, 20);
+      const rawEma50 = calculateEMA(closes, 50);
+      const rawEma200 = calculateEMA(closes, Math.min(200, closes.length - 1));
+      const rawRsi = calculateRSI(closes, 14);
+      const rawAtr = calculateATR(candles, 14);
+
+      const ema20Val = Array.isArray(rawEma20) ? rawEma20[rawEma20.length - 1] : rawEma20;
+      const ema50Val = Array.isArray(rawEma50) ? rawEma50[rawEma50.length - 1] : rawEma50;
+      const ema200Val = Array.isArray(rawEma200) ? rawEma200[rawEma200.length - 1] : rawEma200;
+      const rsiVal = Array.isArray(rawRsi) ? rawRsi[rawRsi.length - 1] : rawRsi;
+      const atrVal = Array.isArray(rawAtr) ? rawAtr[rawAtr.length - 1] : rawAtr;
 
       // Structure calculation
       const recentHigh = Math.max(...highs.slice(-20));
@@ -61,8 +67,10 @@ class AgentMemory {
 
       // Trend definition
       let trend = 'NEUTRAL';
-      if (currentCandle.close > ema20 && ema20 > ema50) trend = 'BULLISH';
-      else if (currentCandle.close < ema20 && ema20 < ema50) trend = 'BEARISH';
+      if (ema20Val && ema50Val) {
+        if (currentCandle.close > ema20Val && ema20Val > ema50Val) trend = 'BULLISH';
+        else if (currentCandle.close < ema20Val && ema20Val < ema50Val) trend = 'BEARISH';
+      }
 
       // Detect Candlestick Formations
       const isBullishEngulfing = prevCandle.close < prevCandle.open &&
@@ -88,11 +96,11 @@ class AgentMemory {
         equilibrium: equilibrium.toFixed(2),
         support: recentLow.toFixed(2),
         resistance: recentHigh.toFixed(2),
-        ema20: ema20 ? ema20.toFixed(2) : null,
-        ema50: ema50 ? ema50.toFixed(2) : null,
-        ema200: ema200 ? ema200.toFixed(2) : null,
-        rsi: rsi ? rsi.toFixed(1) : null,
-        atr: atr ? atr.toFixed(2) : null,
+        ema20: typeof ema20Val === 'number' ? ema20Val.toFixed(2) : null,
+        ema50: typeof ema50Val === 'number' ? ema50Val.toFixed(2) : null,
+        ema200: typeof ema200Val === 'number' ? ema200Val.toFixed(2) : null,
+        rsi: typeof rsiVal === 'number' ? rsiVal.toFixed(1) : null,
+        atr: typeof atrVal === 'number' ? atrVal.toFixed(2) : null,
         candlestick: isBullishEngulfing ? 'Bullish Engulfing' : isBearishEngulfing ? 'Bearish Engulfing' : isPinbarBull ? 'Bullish Pinbar (Hammer)' : isPinbarBear ? 'Bearish Pinbar (Shooting Star)' : 'Normal',
       };
     }

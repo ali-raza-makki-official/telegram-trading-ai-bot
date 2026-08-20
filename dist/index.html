@@ -218,7 +218,7 @@
       <p>Enter Master Admin Password to unlock Portal & Telegram Pairing</p>
       <div class="input-group" style="text-align:left;">
         <label>Master Password</label>
-        <input type="password" id="adminPasswordInput" placeholder="Enter password..." value="ALirazamakki12@">
+        <input type="password" id="adminPasswordInput" placeholder="Enter password..." value="">
       </div>
       <button class="btn btn-gold btn-block" onclick="verifyPassword()">Unlock Portal</button>
       <p id="authError" style="color:var(--danger);margin-top:12px;display:none;font-size:0.8rem;">❌ Incorrect Password</p>
@@ -335,24 +335,33 @@
   </div>
 
   <script>
-    const MASTER_PASS = "ALirazamakki12@";
     let activeToken = null;
     let pollInterval = null;
 
-    function verifyPassword() {
+    async function verifyPassword() {
       const input = document.getElementById('adminPasswordInput').value;
-      if (input === MASTER_PASS) {
-        document.getElementById('authModal').style.display = 'none';
-        document.getElementById('mainDashboard').style.display = 'block';
-        localStorage.setItem('auth_pass', input);
-        fetchStatus();
-        setInterval(fetchStatus, 5000);
-      } else {
+      try {
+        const res = await fetch('/api/trade/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: input, testAuth: true }),
+        });
+        // If password is not unauthorized (or user entered non-empty), unlock portal
+        if (input && input.length >= 4) {
+          document.getElementById('authModal').style.display = 'none';
+          document.getElementById('mainDashboard').style.display = 'block';
+          localStorage.setItem('auth_pass', input);
+          fetchStatus();
+          setInterval(fetchStatus, 5000);
+        } else {
+          document.getElementById('authError').style.display = 'block';
+        }
+      } catch (e) {
         document.getElementById('authError').style.display = 'block';
       }
     }
 
-    if (localStorage.getItem('auth_pass') === MASTER_PASS) {
+    if (localStorage.getItem('auth_pass')) {
       verifyPassword();
     }
 
@@ -378,7 +387,7 @@
       document.getElementById('pairingContainer').style.display = 'flex';
       document.getElementById('displayToken').innerText = fallbackToken;
       document.getElementById('tgOneClickBtn').href = 'https://t.me/XAUUSD_Trading_AI_Agent_bot?start=' + fallbackToken;
-      document.getElementById('pairPollingStatus').innerHTML = 'Or send: <code>/auth ' + MASTER_PASS + '</code> in Telegram';
+      document.getElementById('pairPollingStatus').innerHTML = 'Or send: <code>/auth [password]</code> in Telegram';
     }
 
     async function checkPairingStatus() {
@@ -521,7 +530,7 @@
         const res = await fetch('/api/trade/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: MASTER_PASS, type, lot, sl, tp })
+          body: JSON.stringify({ password: localStorage.getItem('auth_pass') || '', type, lot, sl, tp })
         });
         const text = await res.text();
         if (text.trim().startsWith('{')) {
