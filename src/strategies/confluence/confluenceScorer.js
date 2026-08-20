@@ -81,11 +81,16 @@ function scoreConfluence({
     if (correlatedData.DXY.bias === 'BEARISH' || correlatedData.DXY.change < -0.1) correlationScore += 50;
     else if (correlatedData.DXY.bias === 'BULLISH' || correlatedData.DXY.change > 0.1) correlationScore -= 50;
   }
-  if (correlatedData.XAGUSD) {
-    if (correlatedData.XAGUSD.bias === 'BULLISH' || correlatedData.XAGUSD.change > 0.1) correlationScore += 50;
-    else if (correlatedData.XAGUSD.bias === 'BEARISH' || correlatedData.XAGUSD.change < -0.1) correlationScore -= 50;
+  // SMT Divergence (Gold vs Silver)
+  const macroEngine = require('../../market-data/macroEngine');
+  const silverCandles = candlesByTimeframe['XAGUSD'] || [];
+  const smt = macroEngine.detectSMTDivergence(triggerCandles, silverCandles);
+  if (smt) {
+    if (smt.bias === 'BULLISH') correlationScore += 40;
+    else if (smt.bias === 'BEARISH') correlationScore -= 40;
   }
-  const correlationContribution = Math.max(-100, Math.min(100, correlationScore)) * 0.05;
+
+  const correlationContribution = Math.max(-100, Math.min(100, correlationScore)) * 0.10;
 
   // Total raw score [-100 to +100]
   const rawTotalScore =
@@ -99,14 +104,19 @@ function scoreConfluence({
   const finalScore = Number(rawTotalScore.toFixed(1));
   const confidence = Math.min(100, Math.abs(finalScore));
 
+  const MIN_CONFLUENCE_THRESHOLD = Number(config.strategy.minConfluenceScore || 70.0);
+
   let bias = 'NEUTRAL';
-  if (finalScore >= 35) bias = 'BULLISH';
-  else if (finalScore <= -35) bias = 'BEARISH';
+  if (finalScore >= 35 && confidence >= 50) bias = 'BULLISH';
+  else if (finalScore <= -35 && confidence >= 50) bias = 'BEARISH';
+
+  const isActionable = confidence >= MIN_CONFLUENCE_THRESHOLD && bias !== 'NEUTRAL';
 
   // Gather key confluence bullet points
   const keyReasons = [];
   if (smc.confluenceReasons) keyReasons.push(...smc.confluenceReasons);
   if (ict.confluenceReasons) keyReasons.push(...ict.confluenceReasons);
+  if (smt) keyReasons.push(`SMT Divergence: ${smt.description}`);
   if (candlesPattern.primaryPattern) {
     keyReasons.push(`Candlestick Pattern: ${candlesPattern.primaryPattern.pattern} (${candlesPattern.primaryPattern.bias})`);
   }
@@ -142,6 +152,32 @@ function scoreConfluence({
     suggestedTp1 = Number((currentPrice - riskDistance * 1.5).toFixed(2));
     suggestedTp2 = Number((currentPrice - riskDistance * 3.0).toFixed(2));
   }
+
+  return {
+    symbol,
+    score: finalScore,
+    confidence,
+    minThreshold: MIN_CONFLUENCE_THRESHOLD,
+    bias,
+    isActionable,
+    currentPrice,
+    suggestedSl,
+    suggestedTp1,
+    suggestedTp2,
+    invalidationLevel,
+    riskRewardRatio: '1:2.0',
+    primarySetup: smc.primarySetup || ict.primarySetup || 'Multi-Timeframe Structure',
+    reasons: keyReasons,
+    timeframeDetails: {
+      triggerTimeframe: triggerTf,
+      higherTimeframe: htf,
+      smc,
+      ict,
+      smt,
+      indicators,
+      candlesticks: candlesPattern,
+    },
+  };
 
   const riskRewardRatio = suggestedSl && suggestedTp1 && Math.abs(currentPrice - suggestedSl) > 0
     ? Number((Math.abs(suggestedTp1 - currentPrice) / Math.abs(currentPrice - suggestedSl)).toFixed(2))

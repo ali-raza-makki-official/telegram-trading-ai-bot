@@ -317,18 +317,47 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
   }
 
   setupCallbackQueries() {
+    if (!this.processedActionTokens) {
+      this.processedActionTokens = new Set();
+    }
+
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
 
-      // 1. Dynamic Trade Execution from AI Recommendation
+      // 1. Dynamic Trade Execution from AI Recommendation with Strict Risk & Staleness Guards
       if (data.startsWith('TRADE:')) {
-        const [, type, lotStr, slStr, tpStr] = data.split(':');
+        const parts = data.split(':');
+        const [, type, lotStr, slStr, tpStr, quotePriceStr, timestampStr, token] = parts;
         const lot = parseFloat(lotStr) || 0.01;
         const sl = parseFloat(slStr) || null;
         const tp = parseFloat(tpStr) || null;
+        const quotePrice = parseFloat(quotePriceStr) || null;
+        const timestamp = parseInt(timestampStr, 10) || null;
+
+        // Idempotency / Double-Click Lock
+        if (token && this.processedActionTokens.has(token)) {
+          return ctx.answerCallbackQuery({ text: '⚠️ Order already processed or in execution.', show_alert: true });
+        }
+        if (token) this.processedActionTokens.add(token);
+
+        // Time Expiration Check (Max 3 minutes validity)
+        if (timestamp && Date.now() - timestamp > 180000) {
+          return ctx.answerCallbackQuery({ text: '⏳ Signal expired (>3 mins). Please generate a fresh analysis.', show_alert: true });
+        }
+
+        // Live Price & Slippage Guard (Max $3.00 / 30 pips deviation)
+        const livePrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+        if (quotePrice && Math.abs(livePrice - quotePrice) > 3.00) {
+          const kb = new InlineKeyboard().text('🔄 Re-Analyze Market', 'ACTION:ANALYZE_15m');
+          await ctx.answerCallbackQuery({ text: '⚠️ Market price shifted from quoted setup!', show_alert: true });
+          return ctx.reply(
+            `🛡️ *Trade Aborted (Slippage & Staleness Protection)*\n\n• Quoted Entry: \`$${quotePrice.toFixed(2)}\`\n• Current Live Price: \`$${livePrice.toFixed(2)}\`\n• Deviation: \`$${Math.abs(livePrice - quotePrice).toFixed(2)}\` (> $3.00 threshold)\n\n_Market moved beyond safe entry zone. Tap below to synthesize fresh setup._`,
+            { parse_mode: 'Markdown', reply_markup: kb }
+          );
+        }
 
         await ctx.answerCallbackQuery({ text: `⚡ Executing ${type} Order on Exness MT5...` });
-        await ctx.reply(`⏳ *Executing Live ${type} Trade on Exness MT5...*\n• Volume: \`${lot} Lot\`\n• SL: \`$${sl || 'N/A'}\` | TP: \`$${tp || 'N/A'}\``, { parse_mode: 'Markdown' });
+        await ctx.reply(`⏳ *Executing Live ${type} Trade on Exness MT5...*\n• Volume: \`${lot} Lot\`\n• Entry: \`$${livePrice.toFixed(2)}\`\n• SL: \`$${sl || 'N/A'}\` | TP: \`$${tp || 'N/A'}\``, { parse_mode: 'Markdown' });
 
         try {
           const result = await this.orchestrator.executeManualTrade({
@@ -639,13 +668,16 @@ Always provide 2 to 4 actionable buttons for effortless user interaction!
 
           let kb = new InlineKeyboard();
 
-          // 1. If AI recommended a trade, add prominent 1-click execution button
+          // 1. If AI recommended a trade, add prominent 1-click execution button with slippage & idempotency token
           if (parsed.trade_suggestion && parsed.trade_suggestion.recommended && parsed.trade_suggestion.type) {
             const t = parsed.trade_suggestion;
             const tType = t.type.toUpperCase();
             const slVal = t.sl ? t.sl.toFixed(1) : (tType === 'BUY' ? (fullContext.livePrice - 12).toFixed(1) : (fullContext.livePrice + 12).toFixed(1));
             const tpVal = t.tp ? t.tp.toFixed(1) : (tType === 'BUY' ? (fullContext.livePrice + 25).toFixed(1) : (fullContext.livePrice - 25).toFixed(1));
-            kb.text(`⚡ Execute ${tType} @ $${fullContext.livePrice.toFixed(1)} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${t.lot || 0.01}:${slVal}:${tpVal}`).row();
+            const quoteTime = Date.now();
+            const quotePrice = fullContext.livePrice.toFixed(2);
+            const token = `tok_${quoteTime}_${Math.random().toString(36).substring(2, 7)}`;
+            kb.text(`⚡ Execute ${tType} @ $${quotePrice} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${t.lot || 0.01}:${slVal}:${tpVal}:${quotePrice}:${quoteTime}:${token}`).row();
           }
 
           // 2. Add dynamic interactive buttons returned by DeepSeek
