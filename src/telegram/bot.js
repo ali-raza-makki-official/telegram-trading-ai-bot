@@ -320,27 +320,174 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
 
+      // 1. Dynamic Trade Execution from AI Recommendation
+      if (data.startsWith('TRADE:')) {
+        const [, type, lotStr, slStr, tpStr] = data.split(':');
+        const lot = parseFloat(lotStr) || 0.01;
+        const sl = parseFloat(slStr) || null;
+        const tp = parseFloat(tpStr) || null;
+
+        await ctx.answerCallbackQuery({ text: `⚡ Executing ${type} Order on Exness MT5...` });
+        await ctx.reply(`⏳ *Executing Live ${type} Trade on Exness MT5...*\n• Volume: \`${lot} Lot\`\n• SL: \`$${sl || 'N/A'}\` | TP: \`$${tp || 'N/A'}\``, { parse_mode: 'Markdown' });
+
+        try {
+          const result = await this.orchestrator.executeManualTrade({
+            symbol: config.system.primarySymbol,
+            type: type.toUpperCase(),
+            lot,
+            sl,
+            tp,
+          });
+
+          const kb = new InlineKeyboard()
+            .text('📊 View Positions', 'ACTION:POSITIONS')
+            .text('🔍 Re-Analyze Market', 'ACTION:ANALYZE_15m');
+
+          await ctx.reply(
+            `✅ *Live Order Successfully Executed!*\n\n• Broker: \`Exness MT5\`\n• Ticket: \`#${result.ticket || 'FILLED'}\`\n• Order: *${type.toUpperCase()}* (${lot} Lot)\n• Status: *OPEN*\n• Stop Loss: \`$${sl || 'None'}\`\n• Take Profit: \`$${tp || 'None'}\``,
+            { parse_mode: 'Markdown', reply_markup: kb }
+          );
+        } catch (err) {
+          logger.error({ err: err.message }, 'Failed executing button trade');
+          await ctx.reply(`❌ *Trade Execution Failed:* ${err.message}`, { parse_mode: 'Markdown' });
+        }
+        return;
+      }
+
+      // 2. Dynamic Analysis Action (15m, 1h, 4h)
+      if (data.startsWith('ACTION:ANALYZE_')) {
+        const tf = data.replace('ACTION:ANALYZE_', '');
+        await ctx.answerCallbackQuery({ text: `Analyzing ${tf} Gold structure...` });
+        await ctx.reply(`🔍 *Running DeepSeek AI analysis for ${tf} timeframe...*`, { parse_mode: 'Markdown' });
+
+        try {
+          const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, tf);
+          const price = (require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+          
+          let kb = new InlineKeyboard();
+          if (thesis.suggested_sl && thesis.suggested_tp1) {
+            const bType = thesis.bias.includes('BUY') || thesis.bias.includes('BULL') ? 'BUY' : 'SELL';
+            kb.text(`⚡ Execute ${bType} (${bType === 'BUY' ? 'Long' : 'Short'})`, `TRADE:${bType}:0.01:${thesis.suggested_sl}:${thesis.suggested_tp1}`).row();
+          }
+          kb.text('🔄 15m Analysis', 'ACTION:ANALYZE_15m')
+            .text('📈 1h Trend', 'ACTION:ANALYZE_1h')
+            .text('💼 Account Status', 'ACTION:STATUS');
+
+          const msg = `
+🤖 *AI Gold Analysis (${config.system.primarySymbol} — ${tf})*
+
+🧭 *Bias:* *${thesis.bias}* (Confidence: ${thesis.confidence}%)
+🎯 *Setup:* ${thesis.primary_setup}
+
+📝 *Rationale:*
+${thesis.reasoning}
+
+📐 *Trade Geometry:*
+• Current Price: \`$${Number(price).toFixed(2)}\`
+• Entry Zone: \`${thesis.entry_zone || 'Market'}\`
+• Stop Loss: \`$${thesis.suggested_sl || 'N/A'}\`
+• Take Profit: \`$${thesis.suggested_tp1 || 'N/A'}\`
+• Risk/Reward: \`${thesis.risk_reward_ratio || '1:2'}R\`
+`;
+          await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ Analysis error: ${err.message}`);
+        }
+        return;
+      }
+
+      // 3. Dynamic Account Status Action
+      if (data === 'ACTION:STATUS') {
+        await ctx.answerCallbackQuery();
+        const summary = await this.orchestrator.getStatusSummary();
+        const price = (require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+
+        const kb = new InlineKeyboard()
+          .text('🔍 Run AI Analysis', 'ACTION:ANALYZE_15m')
+          .text('📊 Open Positions', 'ACTION:POSITIONS').row()
+          .text('⚡ Quick Buy', `TRADE:BUY:0.01:${(price - 12).toFixed(1)}:${(price + 25).toFixed(1)}`)
+          .text('⚡ Quick Sell', `TRADE:SELL:0.01:${(price + 12).toFixed(1)}:${(price - 25).toFixed(1)}`);
+
+        const msg = `
+⚜️ *Live Trading Agent Status*
+
+📊 *Market Snapshot:*
+• Asset: \`${summary.symbol}\`
+• Live Price: \`$${Number(price).toFixed(2)}\`
+• Session: *${summary.session.marketSession}*
+• Active Killzone: *${summary.session.activeKillzone ? summary.session.activeKillzone.name : 'Standard'}*
+
+💼 *Broker Account (Exness MT5):*
+• Balance: \`$${Number(summary.account.balance).toFixed(2)} USD\`
+• Equity: \`$${Number(summary.account.equity).toFixed(2)} USD\`
+• Floating P&L: \`$${Number(summary.account.floatingPnl || 0).toFixed(2)}\`
+
+🤖 *AI Engine:*
+• Model: \`DeepSeek V3/R1\`
+• Bias: *${summary.latestBias || 'BULLISH'}*
+• Execution: *METAAPI CLOUD (LIVE)*
+`;
+        await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        return;
+      }
+
+      // 4. Dynamic Positions Action
+      if (data === 'ACTION:POSITIONS') {
+        await ctx.answerCallbackQuery();
+        const positions = await this.orchestrator.getOpenPositions();
+        if (!positions || positions.length === 0) {
+          const kb = new InlineKeyboard()
+            .text('🔍 Scan for Setups', 'ACTION:ANALYZE_15m')
+            .text('💼 Account Status', 'ACTION:STATUS');
+          return ctx.reply('📭 *No open positions active on Exness MT5.*', { parse_mode: 'Markdown', reply_markup: kb });
+        }
+
+        let kb = new InlineKeyboard();
+        for (const p of positions) {
+          kb.text(`❌ Close #${p.ticket || p.id}`, `ACTION:CLOSE_${p.ticket || p.id}`).row();
+        }
+        kb.text('🔍 Run AI Analysis', 'ACTION:ANALYZE_15m');
+
+        let msg = `📊 *Active Open Positions (${positions.length}):*\n\n`;
+        for (const p of positions) {
+          msg += `• *#${p.ticket || p.id}* — ${p.type} ${p.volume || p.lot} lot @ $${p.openPrice || p.price}\n  PnL: \`$${p.profit || 0}\` | SL: $${p.stopLoss || 'None'} | TP: $${p.takeProfit || 'None'}\n\n`;
+        }
+        await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        return;
+      }
+
+      // 5. Dynamic Close Single Position
+      if (data.startsWith('ACTION:CLOSE_')) {
+        const ticket = data.replace('ACTION:CLOSE_', '');
+        await ctx.answerCallbackQuery({ text: `Closing position #${ticket}...` });
+        try {
+          await this.orchestrator.closePositionByTicket(ticket);
+          await ctx.reply(`✅ *Position #${ticket} Closed successfully.*`, { parse_mode: 'Markdown' });
+        } catch (err) {
+          await ctx.reply(`❌ Failed closing position: ${err.message}`);
+        }
+        return;
+      }
+
+      // 6. Signal Approval Fallback
       if (data.startsWith('APPROVE_')) {
         const approvalId = data.replace('APPROVE_', '');
         const pending = this.pendingApprovals.get(approvalId);
-
-        if (!pending) {
-          return ctx.answerCallbackQuery({ text: '⚠️ Signal expired or already processed.', show_alert: true });
-        }
-
+        if (!pending) return ctx.answerCallbackQuery({ text: 'Signal expired.', show_alert: true });
         clearTimeout(pending.timeout);
         this.pendingApprovals.delete(approvalId);
 
         try {
           const result = await this.orchestrator.executeApprovedSignal(pending.signal);
           await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-          await ctx.reply(`✅ *Trade Signal Approved and Executed!*\n• Ticket: \`${result.trade.ticket}\`\n• Type: ${pending.signal.thesis.bias}\n• Lot: ${result.trade.lot}\n• Price: $${result.trade.entryPrice}`, { parse_mode: 'Markdown' });
-          await ctx.answerCallbackQuery({ text: 'Trade executed successfully!' });
+          await ctx.reply(`✅ *Trade Executed!*\n• Ticket: \`${result.trade.ticket}\`\n• Type: ${pending.signal.thesis.bias}\n• Lot: ${result.trade.lot}`, { parse_mode: 'Markdown' });
         } catch (err) {
           await ctx.reply(`❌ Execution failed: ${err.message}`);
-          await ctx.answerCallbackQuery({ text: 'Execution failed', show_alert: true });
         }
-      } else if (data.startsWith('REJECT_')) {
+        return;
+      }
+
+      if (data.startsWith('REJECT_')) {
         const approvalId = data.replace('REJECT_', '');
         const pending = this.pendingApprovals.get(approvalId);
         if (pending) {
@@ -348,8 +495,8 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
           this.pendingApprovals.delete(approvalId);
         }
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-        await ctx.reply('❌ *Trade Signal Dismissed.*', { parse_mode: 'Markdown' });
-        await ctx.answerCallbackQuery({ text: 'Signal dismissed' });
+        await ctx.reply('❌ *Signal Dismissed.*', { parse_mode: 'Markdown' });
+        return;
       }
     });
   }
@@ -357,28 +504,66 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
   setupMessageHandlers() {
     this.bot.on('message:text', async (ctx) => {
       const text = ctx.message.text.trim();
-      if (text.startsWith('/')) return; // handled by command handlers
+      if (text.startsWith('/')) return; // Handled by command handlers
 
       const lower = text.toLowerCase();
+      const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+
+      // Conversational Greeting with Interactive Smart UI
       if (['hi', 'hello', 'hey', 'start', 'salam', 'assalam o alaikum'].includes(lower)) {
+        const kb = new InlineKeyboard()
+          .text('📊 Live Gold Analysis', 'ACTION:ANALYZE_15m')
+          .text('💼 Account Status', 'ACTION:STATUS').row()
+          .text('📈 1h Macro Trend', 'ACTION:ANALYZE_1h')
+          .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+
         return ctx.reply(
-          `👋 *Hello Ali Raza!*\n\nI am your **AI Gold (XAU/USD) Trading Agent** connected to Exness MT5.\n\n📋 *Quick Commands:*\n• /status — Account Balance ($463.91), Equity & Market state\n• /analyze — DeepSeek AI Gold Technical Analysis\n• /positions — View active open trades\n• /help — Full command manual\n\n_Or simply ask me any trading question!_`,
-          { parse_mode: 'Markdown' }
+          `👋 *Assalam o Alaikum Ali Raza!*\n\nMain aap ka **Autonomous Gold (XAU/USD) Trading AI Agent** hoon.\n\n⚜️ *Current Market State:*\n• Live Gold Price: \`$${exactPrice.toFixed(2)} USD\`\n• Broker: \`Exness MT5 (Trial16)\`\n• Balance: \`$463.91 USD\`\n\nNeeche diye gaye buttons par tap karein ya mujh se koi bhi trading sawal poochein:`,
+          { parse_mode: 'Markdown', reply_markup: kb }
         );
       }
 
-      // Answer conversational trading questions using DeepSeek AI
-      await ctx.reply('💭 *Thinking with DeepSeek AI...*', { parse_mode: 'Markdown' });
+      // Intelligent Conversational AI Reasoner with Dynamic UI generation
+      await ctx.reply('💭 *Analyzing market context & synthesizing intelligent response with DeepSeek AI...*', { parse_mode: 'Markdown' });
       try {
         const summary = await this.orchestrator.getStatusSummary();
         const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
         const ds = new DeepSeekProvider();
 
-        const exactPrice = (summary.currentPrice && summary.currentPrice > 4000) ? summary.currentPrice : (require('../market-data/marketFeed').getLatestPrice() || 4518.74);
-
         if (!ds.isAvailable()) {
-          return ctx.reply(`Current Gold Price: $${exactPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
+          const kb = new InlineKeyboard()
+            .text('🔍 Analyze 15m', 'ACTION:ANALYZE_15m')
+            .text('💼 Status', 'ACTION:STATUS');
+          return ctx.reply(`Current Gold Price: $${exactPrice.toFixed(2)}\nSession: ${summary.session.marketSession}`, { reply_markup: kb });
         }
+
+        const systemPrompt = `
+You are an expert Autonomous Gold (XAU/USD) Trading AI Copilot chatting with user Ali Raza in Telegram.
+Current Market Context:
+- Exact Current Gold Price on Exness MT5: $${exactPrice.toFixed(2)} USD (MUST use this exact price).
+- Market Session: ${summary.session.marketSession}
+- Broker: Exness MT5 (Trial16), Account Balance: $${Number(summary.account.balance).toFixed(2)} USD.
+
+Your Goal:
+Respond in a friendly, conversational, and highly intelligent trading manner (in Roman Urdu / Urdu or English based on user's query).
+You have full awareness of Telegram UI buttons and actions!
+Always return a valid JSON object with the following schema:
+{
+  "reply": "Your intelligent markdown response explaining market context, price action, SMC/ICT structure, or answering their question clearly.",
+  "trade_suggestion": {
+    "recommended": boolean, // true if you advise a specific trade right now
+    "type": "BUY" or "SELL",
+    "lot": 0.01,
+    "entry": number,
+    "sl": number,
+    "tp": number
+  },
+  "interactive_buttons": [
+    { "text": "Button Label", "action": "ACTION:ANALYZE_15m" | "ACTION:ANALYZE_1h" | "ACTION:STATUS" | "ACTION:POSITIONS" | "TRADE:BUY:0.01:SL:TP" | "TRADE:SELL:0.01:SL:TP" }
+  ]
+}
+Always provide 2 to 4 relevant interactive buttons so the user can easily tap actions, execute trades, or choose timeframes!
+`;
 
         const response = await fetch(`${ds.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
           method: 'POST',
@@ -387,30 +572,68 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
             'Authorization': `Bearer ${ds.apiKey}`,
           },
           body: JSON.stringify({
-            model: ds.model,
+            model: 'deepseek-chat',
             messages: [
-              {
-                role: 'system',
-                content: `You are an expert Autonomous Gold (XAU/USD) Trading AI assistant connected to Exness MT5. Current exact Gold price on Exness MT5 is $${exactPrice.toFixed(2)}, Market Session: ${summary.session.marketSession}. You must use this exact current Gold price ($${exactPrice.toFixed(2)}) in all analysis and responses. Be concise, professional, accurate, and provide clear SMC/ICT trading insights.`,
-              },
+              { role: 'system', content: systemPrompt },
               { role: 'user', content: text },
             ],
+            response_format: { type: 'json_object' },
             temperature: 0.3,
-            max_tokens: 800,
+            max_tokens: 1000,
           }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          const aiReply = data.choices?.[0]?.message?.content || 'I could not generate a response.';
-          await ctx.reply(`🤖 *AI Assistant:*\n\n${aiReply}`, { parse_mode: 'Markdown' });
+          const content = data.choices?.[0]?.message?.content || '{}';
+          let parsed;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            parsed = { reply: content, interactive_buttons: [] };
+          }
+
+          let kb = new InlineKeyboard();
+
+          // 1. If AI recommended a trade, add prominent 1-click execution button
+          if (parsed.trade_suggestion && parsed.trade_suggestion.recommended && parsed.trade_suggestion.type) {
+            const t = parsed.trade_suggestion;
+            const tType = t.type.toUpperCase();
+            const slVal = t.sl ? t.sl.toFixed(1) : (tType === 'BUY' ? (exactPrice - 12).toFixed(1) : (exactPrice + 12).toFixed(1));
+            const tpVal = t.tp ? t.tp.toFixed(1) : (tType === 'BUY' ? (exactPrice + 25).toFixed(1) : (exactPrice - 25).toFixed(1));
+            kb.text(`⚡ Execute ${tType} @ $${exactPrice.toFixed(1)} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${t.lot || 0.01}:${slVal}:${tpVal}`).row();
+          }
+
+          // 2. Add dynamic interactive buttons returned by DeepSeek
+          if (Array.isArray(parsed.interactive_buttons) && parsed.interactive_buttons.length > 0) {
+            let rowCount = 0;
+            for (const btn of parsed.interactive_buttons) {
+              kb.text(btn.text, btn.action);
+              rowCount++;
+              if (rowCount % 2 === 0) kb.row();
+            }
+          } else {
+            // Default fallback interactive keyboard
+            kb.row()
+              .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
+              .text('📈 1h Trend', 'ACTION:ANALYZE_1h').row()
+              .text('💼 Account Status', 'ACTION:STATUS')
+              .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+          }
+
+          await ctx.reply(parsed.reply, { parse_mode: 'Markdown', reply_markup: kb });
         } else {
-          await ctx.reply(`Current Gold Price: $${summary.currentPrice.toFixed(2)}\nMarket Session: ${summary.session.marketSession}\nType /analyze for full SMC/ICT thesis!`);
+          const kb = new InlineKeyboard()
+            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
+            .text('💼 Account Status', 'ACTION:STATUS');
+          await ctx.reply(`⚜️ *Gold Market Price:* \`$${exactPrice.toFixed(2)} USD\`\n• Session: *${summary.session.marketSession}*`, { parse_mode: 'Markdown', reply_markup: kb });
         }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed handling text message');
-        const price = require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4511.75;
-        await ctx.reply(`Current Gold Price: $${Number(price).toFixed(2)}\nType /analyze for full SMC/ICT thesis!`);
+        const kb = new InlineKeyboard()
+          .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
+          .text('💼 Account Status', 'ACTION:STATUS');
+        await ctx.reply(`⚜️ *Gold Price:* \`$${exactPrice.toFixed(2)} USD\`\n• Type /analyze for full SMC/ICT thesis!`, { parse_mode: 'Markdown', reply_markup: kb });
       }
     });
   }
