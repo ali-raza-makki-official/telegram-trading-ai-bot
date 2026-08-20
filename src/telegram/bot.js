@@ -407,7 +407,8 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed handling text message');
-        await ctx.reply(`Current Gold Price: $${(this.orchestrator.primarySymbol || 'XAUUSD')}\nType /analyze for full SMC/ICT thesis!`);
+        const price = require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4511.75;
+        await ctx.reply(`Current Gold Price: $${Number(price).toFixed(2)}\nType /analyze for full SMC/ICT thesis!`);
       }
     });
   }
