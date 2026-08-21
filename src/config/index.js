@@ -29,7 +29,7 @@ const config = {
     primaryProvider: process.env.LLM_PRIMARY_PROVIDER || 'gemini', // 'gemini' | 'claude' | 'deepseek' | 'hybrid'
     gemini: {
       apiKey: process.env.GEMINI_API_KEY || '',
-      model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
     },
     claude: {
       apiKey: process.env.ANTHROPIC_API_KEY || '',

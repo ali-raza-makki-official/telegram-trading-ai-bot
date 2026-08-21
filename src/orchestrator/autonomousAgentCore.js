@@ -133,7 +133,31 @@ Output format strictly JSON:
       userPromptText = userQuery || 'Hello';
     }
 
-    // 4. Route to Primary Provider (DeepSeek) with Fallback to Gemini
+    // 4. Route to Primary Provider based on config.llm.primaryProvider
+    const primary = (config.llm.primaryProvider || 'gemini').toLowerCase();
+
+    // Strategy A: Gemini as Primary (100% Free Tier, Multimodal, High Speed)
+    if (primary === 'gemini' && this.gemini.isAvailable()) {
+      try {
+        const geminiRes = await this.gemini.chatCompletion(
+          `${systemPrompt}\n\nUser: ${userPromptText}`,
+          {
+            mode: taskClassification.mode,
+            maxTokens: isDeepThinking ? 1500 : 450,
+            responseFormat: 'json_object',
+          }
+        );
+
+        const jsonMatch = geminiRes.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (gemErr) {
+        logger.warn({ err: gemErr.message }, '[SmartDualRouter] Gemini failed, falling back to DeepSeek...');
+      }
+    }
+
+    // Strategy B: DeepSeek Provider (Primary or Fallback)
     if (this.deepseek.isAvailable()) {
       try {
         const messages = [
@@ -156,18 +180,18 @@ Output format strictly JSON:
           return parsed;
         }
       } catch (dsErr) {
-        logger.warn({ err: dsErr.message }, '[SmartDualRouter] DeepSeek failed, falling back to Gemini Dual-Mode...');
+        logger.warn({ err: dsErr.message }, '[SmartDualRouter] DeepSeek execution failed');
       }
     }
 
-    // Fallback to Gemini with Dual-Mode
-    if (this.gemini.isAvailable()) {
+    // Strategy C: Gemini Fallback if primary was deepseek
+    if (primary !== 'gemini' && this.gemini.isAvailable()) {
       try {
         const geminiRes = await this.gemini.chatCompletion(
           `${systemPrompt}\n\nUser: ${userPromptText}`,
           {
             mode: taskClassification.mode,
-            maxTokens: isDeepThinking ? 1200 : 350,
+            maxTokens: isDeepThinking ? 1500 : 450,
           }
         );
 
@@ -176,7 +200,7 @@ Output format strictly JSON:
           return JSON.parse(jsonMatch[0]);
         }
       } catch (gemErr) {
-        logger.error({ err: gemErr.message }, '[SmartDualRouter] Gemini fallback also failed');
+        logger.error({ err: gemErr.message }, '[SmartDualRouter] Gemini fallback failed');
       }
     }
 
