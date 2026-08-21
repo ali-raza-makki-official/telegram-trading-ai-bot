@@ -110,57 +110,95 @@ class SmartPriceTriggerEngine {
     if (!smcData && !ictData) return [];
     const registered = [];
 
-    // 1. Register Active Order Blocks
-    if (smcData?.orderBlocks && Array.isArray(smcData.orderBlocks)) {
-      for (const ob of smcData.orderBlocks) {
-        if (ob.unmitigated) {
-          const z = this.registerZone({
-            symbol,
-            type: 'ORDER_BLOCK',
-            timeframe: ob.timeframe || '15m',
-            bias: ob.type === 'BULLISH' ? 'BULLISH' : 'BEARISH',
-            minPrice: ob.low,
-            maxPrice: ob.high,
-            referencePrice: currentPrice,
-            description: `Unmitigated ${ob.type} Order Block detected on ${ob.timeframe || '15m'}`,
-          });
-          if (z) registered.push(z);
-        }
+    // 1. Register Active Order Blocks (both object format and array format)
+    let obList = [];
+    if (smcData?.orderBlocks) {
+      if (Array.isArray(smcData.orderBlocks)) {
+        obList = smcData.orderBlocks;
+      } else {
+        obList = [
+          ...(smcData.orderBlocks.bullishOBs || []),
+          ...(smcData.orderBlocks.bearishOBs || []),
+          ...(smcData.orderBlocks.activeOBs || []),
+        ];
+      }
+    }
+
+    for (const ob of obList) {
+      const top = ob.top || ob.high;
+      const bottom = ob.bottom || ob.low;
+      if (top !== undefined && bottom !== undefined) {
+        const isBullish = ob.type ? ob.type.includes('BULLISH') : true;
+        const z = this.registerZone({
+          symbol,
+          type: 'ORDER_BLOCK',
+          timeframe: ob.timeframe || '15m',
+          bias: isBullish ? 'BULLISH' : 'BEARISH',
+          minPrice: Math.min(top, bottom),
+          maxPrice: Math.max(top, bottom),
+          referencePrice: currentPrice,
+          description: `${ob.timeframe || '15m'} ${isBullish ? 'Bullish' : 'Bearish'} Order Block [${Math.min(top, bottom).toFixed(2)} - ${Math.max(top, bottom).toFixed(2)}]`,
+        });
+        if (z) registered.push(z);
       }
     }
 
     // 2. Register Fair Value Gaps (FVG)
-    if (smcData?.fvg && Array.isArray(smcData.fvg)) {
-      for (const fvg of smcData.fvg) {
-        if (!fvg.filled) {
-          const z = this.registerZone({
-            symbol,
-            type: 'FVG',
-            timeframe: fvg.timeframe || '15m',
-            bias: fvg.type === 'BULLISH' ? 'BULLISH' : 'BEARISH',
-            minPrice: fvg.bottom,
-            maxPrice: fvg.top,
-            referencePrice: currentPrice,
-            description: `Open ${fvg.type} FVG (Imbalance Zone) on ${fvg.timeframe || '15m'}`,
-          });
-          if (z) registered.push(z);
-        }
+    let fvgList = [];
+    if (smcData?.fvg) {
+      if (Array.isArray(smcData.fvg)) {
+        fvgList = smcData.fvg;
+      } else {
+        fvgList = [
+          ...(smcData.fvg.bullishFVGs || []),
+          ...(smcData.fvg.bearishFVGs || []),
+          ...(smcData.fvg.activeFVGs || []),
+        ];
+      }
+    }
+
+    for (const fvg of fvgList) {
+      const top = fvg.top || fvg.high;
+      const bottom = fvg.bottom || fvg.low;
+      if (top !== undefined && bottom !== undefined && !fvg.filled) {
+        const isBullish = fvg.type ? fvg.type.includes('BULLISH') : true;
+        const z = this.registerZone({
+          symbol,
+          type: 'FVG',
+          timeframe: fvg.timeframe || '15m',
+          bias: isBullish ? 'BULLISH' : 'BEARISH',
+          minPrice: Math.min(top, bottom),
+          maxPrice: Math.max(top, bottom),
+          referencePrice: currentPrice,
+          description: `${fvg.timeframe || '15m'} ${isBullish ? 'Bullish' : 'Bearish'} FVG Imbalance [${Math.min(top, bottom).toFixed(2)} - ${Math.max(top, bottom).toFixed(2)}]`,
+        });
+        if (z) registered.push(z);
       }
     }
 
     // 3. Register Liquidity Pools (Equal Highs / Equal Lows)
-    if (smcData?.liquidity && Array.isArray(smcData.liquidity)) {
-      for (const liq of smcData.liquidity) {
+    let liqList = [];
+    if (smcData?.liquidity) {
+      if (Array.isArray(smcData.liquidity)) {
+        liqList = smcData.liquidity;
+      } else if (Array.isArray(smcData.liquidity.pools)) {
+        liqList = smcData.liquidity.pools;
+      }
+    }
+
+    for (const liq of liqList) {
+      const level = liq.level || liq.price;
+      if (level) {
         const buffer = 0.50; // $0.50 price zone buffer
         const z = this.registerZone({
           symbol,
           type: 'LIQUIDITY_SWEEP',
           timeframe: '15m',
           bias: liq.type === 'BUY_SIDE' ? 'BEARISH' : 'BULLISH',
-          minPrice: liq.level - buffer,
-          maxPrice: liq.level + buffer,
+          minPrice: level - buffer,
+          maxPrice: level + buffer,
           referencePrice: currentPrice,
-          description: `${liq.type} Liquidity Pool at $${liq.level.toFixed(2)}`,
+          description: `${liq.type || 'SMC'} Liquidity Pool Level at $${level.toFixed(2)}`,
         });
         if (z) registered.push(z);
       }

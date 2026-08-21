@@ -458,31 +458,39 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       const data = ctx.callbackQuery.data;
 
       // 1. Dynamic Trade Execution from AI Recommendation with Strict Risk & Staleness Guards
-      if (data.startsWith('TRADE:')) {
+      if (data.startsWith('TRADE:') || data.startsWith('TRD:')) {
         const parts = data.split(':');
-        const [, type, lotStr, slStr, tpStr, quotePriceStr, timestampStr, token] = parts;
+        let type, lotStr, slStr, tpStr, quotePriceStr, timestamp, token;
+
+        if (data.startsWith('TRD:')) {
+          const [, tCode, lStr, sStr, tStr, qStr, tok] = parts;
+          type = tCode === 'B' ? 'BUY' : 'SELL';
+          lotStr = lStr;
+          slStr = sStr;
+          tpStr = tStr;
+          quotePriceStr = qStr;
+          token = tok;
+        } else {
+          let timestampStr;
+          [, type, lotStr, slStr, tpStr, quotePriceStr, timestampStr, token] = parts;
+          timestamp = parseInt(timestampStr, 10) || null;
+        }
+
         const lot = parseFloat(lotStr) || 0.01;
         const sl = parseFloat(slStr) || null;
         const tp = parseFloat(tpStr) || null;
         const quotePrice = parseFloat(quotePriceStr) || null;
-        const timestamp = parseInt(timestampStr, 10) || null;
 
-        // FIX #13b: Idempotency / Double-Click Lock using time-based token expiry
+        // Idempotency / Double-Click Lock
         if (token) {
           const now = Date.now();
           if (this.processedActionTokens.has(token) && this.processedActionTokens.get(token) > now) {
             return ctx.answerCallbackQuery({ text: '⚠️ Order already processed or in execution.', show_alert: true });
           }
-          // Store token with 10-minute expiry
           this.processedActionTokens.set(token, now + 10 * 60 * 1000);
         }
 
-        // Time Expiration Check (Max 3 minutes validity)
-        if (timestamp && Date.now() - timestamp > 180000) {
-          return ctx.answerCallbackQuery({ text: '⏳ Signal expired (>3 mins). Please generate a fresh analysis.', show_alert: true });
-        }
-
-        // Live Price & Slippage Guard (Max $3.00 / 30 pips deviation)
+        // Live Price & Slippage Guard (Max $3.00 deviation)
         const livePrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
         if (quotePrice && Math.abs(livePrice - quotePrice) > 3.00) {
           const kb = new InlineKeyboard().text('🔄 Re-Analyze Market', 'ACTION:ANALYZE_15m');
@@ -706,6 +714,34 @@ ${thesis.reasoning}
       if (text.startsWith('/')) return; // Handled by command handlers
 
       const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+      const lowerText = text.toLowerCase();
+
+      // Multi-Timeframe Order Block & Zone Search Intent
+      if (
+        lowerText.includes('order block') ||
+        lowerText.includes('orderblock') ||
+        lowerText.includes('odr block') ||
+        lowerText.includes('fvg') ||
+        lowerText.includes('sab time') ||
+        lowerText.includes('all time') ||
+        lowerText.includes('kahan kahan') ||
+        lowerText.includes('find kro')
+      ) {
+        await ctx.reply('🔍 *Scanning Order Blocks, FVGs & Liquidity across all timeframes (5m, 15m, 30m, 1h, 4h, 1D)...*', { parse_mode: 'Markdown' });
+        try {
+          const MultiTimeframeScanner = require('../strategies/smc/multiTimeframeScanner');
+          const report = MultiTimeframeScanner.formatTelegramReport(config.system.primarySymbol);
+          const kb = new InlineKeyboard()
+            .text('📍 Active Watch Zones', 'ACTION:ZONES')
+            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m').row()
+            .text('💼 Account Status', 'ACTION:STATUS')
+            .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+          await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
+          return;
+        } catch (scanErr) {
+          logger.error({ err: scanErr.message }, 'Failed running multi-timeframe scanner');
+        }
+      }
 
       // Sovereign Autonomous AI Agent Core (100% Dynamic Thinking, Research & Actions)
       await ctx.reply('💭 *Thinking, researching & synthesizing sovereign market decision...*', { parse_mode: 'Markdown' });
@@ -746,16 +782,15 @@ ${thesis.reasoning}
           }
         }
 
-        // 2. If in SEMI Mode and trade suggested, add dynamic 1-click execution button with slippage & idempotency token
+        // 2. If in SEMI Mode and trade suggested, add compact 1-click execution button (<64 bytes)
         if (decision.trade_decision && decision.trade_decision.action && decision.trade_decision.action !== 'HOLD') {
           const td = decision.trade_decision;
           const tType = td.action.toUpperCase();
           const slVal = td.sl ? Number(td.sl).toFixed(1) : (tType === 'BUY' ? (exactPrice - 12).toFixed(1) : (exactPrice + 12).toFixed(1));
           const tpVal = td.tp ? Number(td.tp).toFixed(1) : (tType === 'BUY' ? (exactPrice + 25).toFixed(1) : (exactPrice - 25).toFixed(1));
-          const quoteTime = Date.now();
-          const quotePrice = exactPrice.toFixed(2);
-          const token = `tok_${quoteTime}_${Math.random().toString(36).substring(2, 7)}`;
-          kb.text(`⚡ Execute ${tType} @ $${quotePrice} (SL: $${slVal} | TP: $${tpVal})`, `TRADE:${tType}:${td.lot || 0.01}:${slVal}:${tpVal}:${quotePrice}:${quoteTime}:${token}`).row();
+          const shortToken = Math.random().toString(36).substring(2, 6);
+          const cbData = `TRD:${tType[0]}:${td.lot || 0.01}:${slVal}:${tpVal}:${Math.round(exactPrice)}:${shortToken}`;
+          kb.text(`⚡ Execute ${tType} @ $${exactPrice.toFixed(2)} (SL: $${slVal} | TP: $${tpVal})`, cbData).row();
         }
 
         // 3. Render dynamically designed interactive buttons from the AI
