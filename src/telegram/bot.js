@@ -147,50 +147,52 @@ class TelegramBotService {
       }
 
       const msg = `
-🤖 *Autonomous Gold (XAU/USD) Trading Agent*
+🤖 *Autonomous Gold (XAU/USD) Trading AI Agent*
 
-Welcome Ali Raza! I am your AI-powered trading copilot analyzing market structure, SMC, ICT killzones, and candlestick patterns.
+Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidity scanning, and live Exness MT5 execution.
 
-🔐 *Admin Security:*
-If prompted for password, send: \`/auth [your_admin_password]\`
+📋 *Core Commands:*
 
-📋 *Available Commands:*
-• /status — System health, open positions & market bias
-• /analyze \`[pair] [tf]\` — Run on-demand AI analysis
-• /execute \`[buy/sell] [lot] [sl] [tp]\` — Manual trade execution
-• /positions — View all open trades
-• /close \`[ticket|all]\` — Close active position(s)
+🏛️ *Market Analysis & Zones:*
+• /analyze — Master 7-TF Deep Scan + Multi-Tiered Limits
+• /topdown — Daily Sweep (PDH/PDL) & 4H Draw on Liquidity
+• /zones (or /triggers) — Live AI Smart Watch & Trigger Levels
+• /schedule — Session Timers & ICT Killzones
+
+💼 *Execution & Portfolio:*
+• /positions — Active trades, live PnL & 1-tap close
+• /close \`[ticket|all]\` — Close single or all positions
+• /execute \`[buy/sell] [lot] [sl] [tp]\` — Manual order
 • /mode \`[auto|semi|manual]\` — Change autonomy level
-• /setlimit \`[risk|lot|loss] [val]\` — Modify risk limits
-• /pause / /resume — Toggle automated trading
-• /history — View recent predictions & trades
-• /accuracy — View AI prediction win rate & stats
-• /schedule — Market sessions & killzones schedule
+
+🧠 *AI Performance & Status:*
+• /status — Live balance, equity, spread & AI bias
+• /performance — Unified Win Rate, History & Learned Skills
+• /pause / /resume — Toggle background scanning
+• /config — Dynamic Strategy parameters & risk limits
 `;
       await ctx.reply(msg, { parse_mode: 'Markdown' });
     });
 
-    // /status
+    // /status — To-the-point account & market state
     this.bot.command('status', async (ctx) => {
       const summary = await this.orchestrator.getStatusSummary();
       const statusText = `
-📊 *System Status Report*
-
-🏦 *Account & Execution:*
-• Balance: $${summary.account.balance.toFixed(2)}
-• Equity: $${summary.account.equity.toFixed(2)} (Floating PnL: ${summary.account.floatingPnl >= 0 ? '+' : ''}$${summary.account.floatingPnl.toFixed(2)})
-• Execution Engine: \`${summary.executionMode.toUpperCase()}\`
-• Autonomy Mode: \`${summary.autonomyMode.toUpperCase()}\`
-• Trading Active: ${summary.isPaused ? '⏸️ PAUSED' : '▶️ ACTIVE'}
-
-📈 *Current Market State (${summary.symbol}):*
-• Price: $${summary.currentPrice.toFixed(2)}
-• Session: ${summary.session.marketSession}
-• Killzone: ${summary.session.activeKillzone ? summary.session.activeKillzone.name : 'None'}
+📊 *Live System Status*
+• Asset: \`${summary.symbol}\` | Price: \`$${summary.currentPrice.toFixed(2)}\`
+• Session: *${summary.session.marketSession}* | Killzone: *${summary.session.activeKillzone ? summary.session.activeKillzone.name : 'Standard'}*
 • AI Market Bias: *${summary.latestBias || 'NEUTRAL'}*
-• Open Positions: ${summary.account.openPositionsCount}
+
+💼 *Exness MT5 Account:*
+• Balance: \`$${summary.account.balance.toFixed(2)} USD\`
+• Equity: \`$${summary.account.equity.toFixed(2)} USD\` (Floating: ${summary.account.floatingPnl >= 0 ? '+' : ''}$${summary.account.floatingPnl.toFixed(2)})
+• Mode: \`${summary.autonomyMode.toUpperCase()}\` | Engine: \`${summary.executionMode.toUpperCase()}\`
+• Status: ${summary.isPaused ? '⏸️ PAUSED' : '▶️ ACTIVE'} | Open Trades: \`${summary.account.openPositionsCount}\`
 `;
-      await ctx.reply(statusText, { parse_mode: 'Markdown' });
+      const kb = new InlineKeyboard()
+        .text('🏛️ Master Analysis', 'ACTION:ANALYZE_MASTER')
+        .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+      await ctx.reply(statusText, { parse_mode: 'Markdown', reply_markup: kb });
     });
 
     // /analyze — Master 7-Timeframe Deep Scan + Candlesticks + Macro + Multi-Tiered Limit Zones
@@ -211,30 +213,7 @@ If prompted for password, send: \`/auth [your_admin_password]\`
         const report = ComprehensiveEngine.formatTelegramReport(fullData);
 
         // 2. Interactive Multi-Tiered Limit Order Buttons
-        const kb = new InlineKeyboard();
-
-        // Row 1: Primary Tier-1 Limits
-        const b1 = fullData.tieredBuyLimits[0];
-        const s1 = fullData.tieredSellLimits[0];
-        if (b1) kb.text(`📥 BUY Limit 1 @ $${b1.price.toFixed(1)}`, `LMT:B:0.01:${b1.price}:${b1.sl}:${b1.tp}`);
-        if (s1) kb.text(`📤 SELL Limit 1 @ $${s1.price.toFixed(1)}`, `LMT:S:0.01:${s1.price}:${s1.sl}:${s1.tp}`).row();
-
-        // Row 2: Secondary Tier-2 Limits
-        const b2 = fullData.tieredBuyLimits[1];
-        const s2 = fullData.tieredSellLimits[1];
-        if (b2) kb.text(`📥 BUY Limit 2 @ $${b2.price.toFixed(1)}`, `LMT:B:0.01:${b2.price}:${b2.sl}:${b2.tp}`);
-        if (s2) kb.text(`📤 SELL Limit 2 @ $${s2.price.toFixed(1)}`, `LMT:S:0.01:${s2.price}:${s2.sl}:${s2.tp}`).row();
-
-        // Row 3: Tertiary Limit or Navigation
-        const b3 = fullData.tieredBuyLimits[2];
-        const s3 = fullData.tieredSellLimits[2];
-        if (b3 && s3) {
-          kb.text(`📥 BUY Lmt 3 @ $${b3.price.toFixed(1)}`, `LMT:B:0.01:${b3.price}:${b3.sl}:${b3.tp}`)
-            .text(`📤 SELL Lmt 3 @ $${s3.price.toFixed(1)}`, `LMT:S:0.01:${s3.price}:${s3.sl}:${s3.tp}`).row();
-        }
-
-        kb.text('📍 View All Monitored Zones', 'ACTION:ZONES')
-          .text('💼 Account Status', 'ACTION:STATUS');
+        const kb = ComprehensiveEngine.createInteractiveLimitKeyboard(fullData);
 
         try {
           await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
@@ -260,7 +239,7 @@ If prompted for password, send: \`/auth [your_admin_password]\`
       const tp = parts[4] ? parseFloat(parts[4]) : null;
 
       if (!['BUY', 'SELL'].includes(type) || isNaN(lot)) {
-        return ctx.reply('❌ Invalid syntax. Use: `/execute buy 0.1 2640 2660`', { parse_mode: 'Markdown' });
+        return ctx.reply('❌ Invalid syntax. Use: `/execute buy 0.01 4550 4580`', { parse_mode: 'Markdown' });
       }
 
       try {
@@ -273,7 +252,7 @@ If prompted for password, send: \`/auth [your_admin_password]\`
         });
 
         if (result.success) {
-          await ctx.reply(`✅ *Order Executed Successfully!*\n• Ticket: \`${result.trade.ticket}\`\n• Type: ${type}\n• Lot: ${lot}\n• Entry: $${result.trade.entryPrice}\n• SL: ${sl ? '$' + sl : 'None'}\n• TP: ${tp ? '$' + tp : 'None'}`, { parse_mode: 'Markdown' });
+          await ctx.reply(`✅ *Order Executed Successfully!*\n• Ticket: \`#${result.trade.ticket || 'FILLED'}\`\n• Type: *${type}* (${lot} Lot)\n• Entry: $${result.trade.entryPrice}\n• SL: ${sl ? '$' + sl : 'None'} | TP: ${tp ? '$' + tp : 'None'}`, { parse_mode: 'Markdown' });
         } else {
           await ctx.reply(`⛔ *Order Blocked by Risk Layer:*\n${result.reasons.join('\n')}`, { parse_mode: 'Markdown' });
         }
@@ -286,15 +265,18 @@ If prompted for password, send: \`/auth [your_admin_password]\`
     this.bot.command('positions', async (ctx) => {
       const positions = await this.orchestrator.getOpenPositions();
       if (!positions || positions.length === 0) {
-        return ctx.reply('📭 No open positions at the moment.');
+        return ctx.reply('📭 *No open positions at the moment.*', { parse_mode: 'Markdown' });
       }
 
       let msg = `📋 *Active Open Positions (${positions.length}):*\n\n`;
+      let kb = new InlineKeyboard();
       for (const pos of positions) {
-        msg += `• Ticket: \`${pos.ticket || pos.id}\`\n  Type: *${pos.type}* | Lot: ${pos.lot} | Entry: $${pos.entryPrice}\n  Floating PnL: ${pos.floatingPnl >= 0 ? '+' : ''}$${(pos.floatingPnl || 0).toFixed(2)}\n  SL: $${pos.sl || 'None'} | TP: $${pos.tp || 'None'}\n\n`;
+        const pnl = Number(pos.floatingPnl || pos.profit || 0).toFixed(2);
+        msg += `• *#${pos.ticket || pos.id}* — ${pos.type} ${pos.lot || pos.volume} lot @ $${pos.entryPrice || pos.price}\n  PnL: \`${Number(pnl) >= 0 ? '+' : ''}$${pnl}\` | SL: $${pos.sl || pos.stopLoss || 'None'} | TP: $${pos.tp || pos.takeProfit || 'None'}\n\n`;
+        kb.text(`❌ Close #${pos.ticket || pos.id}`, `ACTION:CLOSE_${pos.ticket || pos.id}`).row();
       }
-      msg += 'To close a position, use `/close [ticket]` or `/close all`';
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
+      kb.text('🏛️ Master Analysis', 'ACTION:ANALYZE_MASTER');
+      await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
     });
 
     // /close
@@ -341,145 +323,48 @@ If prompted for password, send: \`/auth [your_admin_password]\`
       await ctx.reply('▶️ *Trading Bot Resumed.* Autonomous scanning active.');
     });
 
-    // /accuracy
-    this.bot.command('accuracy', async (ctx) => {
-      const report = await this.orchestrator.getAccuracyReport();
-      const stats = report.stats;
-      const msg = `
-🎯 *AI Prediction Accuracy Statistics*
-
-• Total Predictions Logged: ${stats.total}
-• Resolved Predictions: ${stats.resolved || 0}
-• Wins (Hit TP1/TP2): ${stats.winCount || 0}
-• Losses (Hit SL): ${stats.lossCount || 0}
-• Win Rate: *${stats.winRate || 0}%*
-• Net Outcome Pips: *${stats.totalPips >= 0 ? '+' : ''}${stats.totalPips || 0} pips*
-
-_Past predictions and outcomes are fed into the LLM context memory to continuously calibrate accuracy._
-`;
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
-    });
-
-    // /zones — Two-Sided Smart Price Watch Zones & Liquidity Triggers
-    this.bot.command('zones', async (ctx) => {
-      try {
-        const MultiTimeframeScanner = require('../strategies/smc/multiTimeframeScanner');
-        const report = MultiTimeframeScanner.formatTelegramReport(config.system.primarySymbol);
-        await ctx.reply(report, { parse_mode: 'Markdown' });
-      } catch (err) {
-        await ctx.reply(`❌ Error loading zones: ${err.message}`);
-      }
-    });
-
-    // /config — Dynamic Strategy Config & Adaptive Parameter Store (Section 7)
-    this.bot.command('config', async (ctx) => {
-      const dynamicConfig = require('../config/dynamicConfig');
-      const configs = dynamicConfig.getAll();
-      
-      let text = '⚙️ *Dynamic Strategy Configuration & Adaptive Store*\n\n';
-      text += '📊 *Strategy Weights & Thresholds (AI Tunable):*\n';
-      for (const c of configs.filter(c => c.is_ai_tunable)) {
-        text += `• \`${c.param_key}\`: *${c.param_value}* (Range: ${c.min_bound}-${c.max_bound} | v${c.version_number})\n`;
-      }
-      
-      text += '\n🛡️ *Hard Risk Limits (Human-Only):*\n';
-      for (const c of configs.filter(c => !c.is_ai_tunable)) {
-        text += `• \`${c.param_key}\`: *${c.param_value}* (v${c.version_number})\n`;
-      }
-      
-      text += '\n_Use Web Dashboard or adaptive tuning approvals to adjust parameters dynamically without redeploying code._';
-      await ctx.reply(text, { parse_mode: 'Markdown' });
-    });
-
-    // /schedule
-    this.bot.command('schedule', async (ctx) => {
-      const session = this.orchestrator.getCurrentSession();
-      const msg = `
-🕒 *Market Sessions & ICT Killzones Schedule*
-
-• Current UTC Time: \`${session.utcTime}\`
-• Active Market Session: *${session.marketSession}*
-• Active Killzones: *${session.activeWindows.length > 0 ? session.activeWindows.map(w => w.name).join(', ') : 'None'}*
-• Weekend State: ${session.isWeekend ? '🔒 Market Closed (Weekend)' : '🔓 Market Open'}
-• Friday NY Close Countdown: ${session.minutesToFridayClose !== null ? `${session.minutesToFridayClose} mins remaining` : 'N/A'}
-
-📅 *Standard Killzone Timers (UTC):*
-• Asian Range: 00:00 - 06:00 UTC
-• London Open: 07:00 - 10:00 UTC
-• NY Open: 12:00 - 15:00 UTC
-• London Close: 15:00 - 17:00 UTC
-• NY Silver Bullet: 14:00 - 15:00 UTC
-`;
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
-    });
-
-    // FIX #28: /history — was listed in /start menu but handler was missing
-    this.bot.command('history', async (ctx) => {
+    // /performance (Unifies /accuracy, /history, /skills with zero duplication)
+    this.bot.command(['performance', 'accuracy', 'history', 'skills'], async (ctx) => {
       try {
         const accuracyTracker = require('../evaluator/accuracyTracker');
+        const postTradeLearner = require('../orchestrator/postTradeLearner');
+        
         const report = await accuracyTracker.getPerformanceReport();
-        const recent = report.recent || [];
+        const skills = postTradeLearner.getSkillsSummary();
         const stats = report.stats || {};
+        const recent = report.recent || [];
 
-        let msg = `📜 *Recent Prediction History (Last 10):*\n\n`;
+        let msg = `🎯 *AI Trading Performance & Learning Dashboard*\n\n`;
+        msg += `📊 *Track Record & Accuracy:*\n`;
+        msg += `• Total Predictions Logged: *${stats.total || 0}*\n`;
+        msg += `• Win Rate: *${stats.winRate || skills.winRate || 0}%* (Wins: ${stats.wins || skills.wins || 0} | Losses: ${stats.losses || skills.losses || 0} | BE: ${skills.breakEvens || 0})\n`;
+        msg += `• Net Pips: *${(stats.total_pips || stats.totalPips || 0) >= 0 ? '+' : ''}${stats.total_pips || stats.totalPips || 0} pips*\n\n`;
 
-        if (recent.length === 0) {
-          msg += '_No predictions recorded yet._\n';
-        } else {
-          for (const p of recent) {
+        if (recent.length > 0) {
+          msg += `📜 *Recent Trade Outcomes:*\n`;
+          for (const p of recent.slice(0, 5)) {
             const icon = p.status === 'HIT_TP1' || p.status === 'HIT_TP2' ? '✅' : p.status === 'HIT_SL' ? '❌' : '⏳';
-            const pips = p.outcome_pips !== null ? `${p.outcome_pips > 0 ? '+' : ''}${p.outcome_pips} pips` : 'Pending';
-            msg += `${icon} *${p.bias}* (${p.timeframe}) — ${p.primary_setup || 'Unknown Setup'}\n`;
-            msg += `   Status: \`${p.status || 'PENDING'}\` | Pips: \`${pips}\` | @ $${Number(p.price_at_prediction || 0).toFixed(2)}\n\n`;
+            const pips = p.outcome_pips !== null ? `${p.outcome_pips > 0 ? '+' : ''}${p.outcome_pips} pips` : 'In Progress';
+            msg += `• ${icon} *${p.bias}* (${p.timeframe || '15m'}) — ${p.primary_setup || 'Setup'}: \`${pips}\`\n`;
+          }
+          msg += `\n`;
+        }
+
+        if (skills.recentLogs && skills.recentLogs.length > 0) {
+          msg += `🧠 *Latest AI Retrospective Lessons:*\n`;
+          for (const log of skills.recentLogs.slice(-2)) {
+            msg += `• _${log.lesson}_\n`;
           }
         }
 
-        if (stats.total > 0) {
-          const winRate = ((stats.wins / stats.total) * 100).toFixed(1);
-          msg += `\n📊 *Overall Stats:*\n• Total: ${stats.total} | Wins: ${stats.wins} | Losses: ${stats.losses}\n• Win Rate: \`${winRate}%\`\n• Total Pips: \`${stats.total_pips > 0 ? '+' : ''}${stats.total_pips}\``;
-        }
-
         const kb = new InlineKeyboard()
-          .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
+          .text('🏛️ Master Analysis', 'ACTION:ANALYZE_MASTER')
           .text('💼 Account Status', 'ACTION:STATUS');
 
         await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
       } catch (err) {
-        logger.error({ err: err.message }, 'Failed to fetch prediction history');
-        await ctx.reply(`❌ Could not load history: ${err.message}`);
-      }
-    });
-
-    // /skills — Autonomous Learned Skills & Retrospective Memory
-    this.bot.command('skills', async (ctx) => {
-      try {
-        const postTradeLearner = require('../orchestrator/postTradeLearner');
-        const summary = postTradeLearner.getSkillsSummary();
-
-        let text = `🧠 *Autonomous AI Learned Skills & Strategy Evolution*\n\n`;
-        text += `• Total Closed Trades Analyzed: *${summary.totalEvaluated}*\n`;
-        text += `• AI Win Rate: *${summary.winRate}%* (Wins: ${summary.wins} | Losses: ${summary.losses} | Break-Evens: ${summary.breakEvens})\n\n`;
-
-        const patterns = Object.values(summary.learnedPatterns || {});
-        if (patterns.length === 0) {
-          text += `_No closed trades logged yet. As trades execute, AI will continuously learn from wins, losses, and break-evens!_\n`;
-        } else {
-          text += `📚 *Evolving Strategy Confidence Library:*\n`;
-          for (const p of patterns.slice(0, 5)) {
-            text += `• *${p.name}*\n  Confidence: \`${p.confidenceScore.toFixed(1)}%\` | W/L/BE: \`${p.winCount}/${p.lossCount}/${p.breakEvenCount}\`\n`;
-          }
-        }
-
-        if (summary.recentLogs && summary.recentLogs.length > 0) {
-          text += `\n📝 *Recent Trade Lessons:*\n`;
-          for (const log of summary.recentLogs.slice(-3)) {
-            text += `• ${log.lesson}\n`;
-          }
-        }
-
-        await ctx.reply(text, { parse_mode: 'Markdown' });
-      } catch (err) {
-        await ctx.reply(`❌ Error loading skills: ${err.message}`);
+        logger.error({ err: err.message }, 'Failed generating unified performance report');
+        await ctx.reply(`❌ Could not load performance: ${err.message}`);
       }
     });
 
@@ -527,6 +412,48 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       } catch (err) {
         await ctx.reply(`❌ Error loading trigger zones: ${err.message}`);
       }
+    });
+
+    // /schedule
+    this.bot.command('schedule', async (ctx) => {
+      const session = this.orchestrator.getCurrentSession();
+      const msg = `
+🕒 *Market Sessions & ICT Killzones Schedule*
+
+• Current UTC Time: \`${session.utcTime}\`
+• Active Market Session: *${session.marketSession}*
+• Active Killzones: *${session.activeWindows.length > 0 ? session.activeWindows.map(w => w.name).join(', ') : 'None'}*
+• Weekend State: ${session.isWeekend ? '🔒 Market Closed (Weekend)' : '🔓 Market Open'}
+• Friday NY Close Countdown: ${session.minutesToFridayClose !== null ? `${session.minutesToFridayClose} mins remaining` : 'N/A'}
+
+📅 *Standard Killzone Timers (UTC):*
+• Asian Range: 00:00 - 06:00 UTC
+• London Open: 07:00 - 10:00 UTC
+• NY Open: 12:00 - 15:00 UTC
+• London Close: 15:00 - 17:00 UTC
+• NY Silver Bullet: 14:00 - 15:00 UTC
+`;
+      await ctx.reply(msg, { parse_mode: 'Markdown' });
+    });
+
+    // /config — Dynamic Strategy Config & Adaptive Parameter Store (Section 7)
+    this.bot.command('config', async (ctx) => {
+      const dynamicConfig = require('../config/dynamicConfig');
+      const configs = dynamicConfig.getAll();
+      
+      let text = '⚙️ *Dynamic Strategy Configuration & Adaptive Store*\n\n';
+      text += '📊 *Strategy Weights & Thresholds (AI Tunable):*\n';
+      for (const c of configs.filter(c => c.is_ai_tunable)) {
+        text += `• \`${c.param_key}\`: *${c.param_value}* (Range: ${c.min_bound}-${c.max_bound} | v${c.version_number})\n`;
+      }
+      
+      text += '\n🛡️ *Hard Risk Limits (Human-Only):*\n';
+      for (const c of configs.filter(c => !c.is_ai_tunable)) {
+        text += `• \`${c.param_key}\`: *${c.param_value}* (v${c.version_number})\n`;
+      }
+      
+      text += '\n_Use Web Dashboard or adaptive tuning approvals to adjust parameters dynamically without redeploying code._';
+      await ctx.reply(text, { parse_mode: 'Markdown' });
     });
   }
 
