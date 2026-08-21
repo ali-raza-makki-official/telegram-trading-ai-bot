@@ -8,6 +8,9 @@ const logger = require('../utils/logger');
  * Real-Time Auto Trailing Stop Loss & Break-Even Engine
  * Automatically moves Stop Loss to Break-Even at 1:1 R:R (+15 pips)
  * and manages partial profit booking.
+ *
+ * FIX #3a: Break-even only marked as applied AFTER successful SL modification.
+ * FIX #3b: No hardcoded fallback price — skip cycle if live price is unavailable.
  */
 class TradeMonitor {
   constructor() {
@@ -36,7 +39,13 @@ class TradeMonitor {
       const positions = await this.orchestrator.getOpenPositions();
       if (!positions || positions.length === 0) return;
 
-      const livePrice = Number(marketFeed.getLatestPrice(config.system.primarySymbol) || 4518.74);
+      // FIX #3b: Skip cycle if live price is unavailable — never use hardcoded fallback
+      const rawPrice = marketFeed.getLatestPrice(config.system.primarySymbol);
+      if (!rawPrice) {
+        logger.warn('TradeMonitor: live price unavailable, skipping break-even cycle to avoid stale data');
+        return;
+      }
+      const livePrice = Number(rawPrice);
 
       for (const pos of positions) {
         const ticket = pos.ticket || pos.id;
@@ -52,16 +61,21 @@ class TradeMonitor {
           const profitDistance = livePrice - entry;
           if (profitDistance >= 1.50 && (!sl || sl < entry)) {
             if (!this.breakEvenApplied.has(ticket)) {
-              this.breakEvenApplied.add(ticket);
               const newSl = Number((entry + 0.10).toFixed(2)); // Entry + small spread buffer
 
               logger.info({ ticket, entry, livePrice, newSl }, 'Triggering Auto Break-Even for BUY position');
-              await this.modifyStopLoss(ticket, newSl, tp);
 
-              if (this.orchestrator.telegram) {
-                this.orchestrator.telegram.broadcastAlert(
-                  `🛡️ *Auto Break-Even Triggered (Risk-Free Trade!)*\n\n• Position: \`#${ticket}\` (BUY)\n• Entry: \`$${entry.toFixed(2)}\`\n• Live Price: \`$${livePrice.toFixed(2)}\` (+${(profitDistance * 10).toFixed(0)} pips)\n• Stop Loss Moved to: \`$${newSl.toFixed(2)}\` (Break-Even)\n\n_Trade is now 100% risk-free!_`
-                );
+              // FIX #3a: Only mark as applied AFTER confirmed success
+              const success = await this.modifyStopLoss(ticket, newSl, tp);
+              if (success) {
+                this.breakEvenApplied.add(ticket);
+                if (this.orchestrator.telegram) {
+                  this.orchestrator.telegram.broadcastAlert(
+                    `🛡️ *Auto Break-Even Triggered (Risk-Free Trade!)*\n\n• Position: \`#${ticket}\` (BUY)\n• Entry: \`$${entry.toFixed(2)}\`\n• Live Price: \`$${livePrice.toFixed(2)}\` (+${(profitDistance * 10).toFixed(0)} pips)\n• Stop Loss Moved to: \`$${newSl.toFixed(2)}\` (Break-Even)\n\n_Trade is now 100% risk-free!_`
+                  );
+                }
+              } else {
+                logger.warn({ ticket }, 'Break-even modify failed — will retry next cycle');
               }
             }
           }
@@ -69,16 +83,21 @@ class TradeMonitor {
           const profitDistance = entry - livePrice;
           if (profitDistance >= 1.50 && (!sl || sl > entry)) {
             if (!this.breakEvenApplied.has(ticket)) {
-              this.breakEvenApplied.add(ticket);
               const newSl = Number((entry - 0.10).toFixed(2));
 
               logger.info({ ticket, entry, livePrice, newSl }, 'Triggering Auto Break-Even for SELL position');
-              await this.modifyStopLoss(ticket, newSl, tp);
 
-              if (this.orchestrator.telegram) {
-                this.orchestrator.telegram.broadcastAlert(
-                  `🛡️ *Auto Break-Even Triggered (Risk-Free Trade!)*\n\n• Position: \`#${ticket}\` (SELL)\n• Entry: \`$${entry.toFixed(2)}\`\n• Live Price: \`$${livePrice.toFixed(2)}\` (+${(profitDistance * 10).toFixed(0)} pips)\n• Stop Loss Moved to: \`$${newSl.toFixed(2)}\` (Break-Even)\n\n_Trade is now 100% risk-free!_`
-                );
+              // FIX #3a: Only mark as applied AFTER confirmed success
+              const success = await this.modifyStopLoss(ticket, newSl, tp);
+              if (success) {
+                this.breakEvenApplied.add(ticket);
+                if (this.orchestrator.telegram) {
+                  this.orchestrator.telegram.broadcastAlert(
+                    `🛡️ *Auto Break-Even Triggered (Risk-Free Trade!)*\n\n• Position: \`#${ticket}\` (SELL)\n• Entry: \`$${entry.toFixed(2)}\`\n• Live Price: \`$${livePrice.toFixed(2)}\` (+${(profitDistance * 10).toFixed(0)} pips)\n• Stop Loss Moved to: \`$${newSl.toFixed(2)}\` (Break-Even)\n\n_Trade is now 100% risk-free!_`
+                  );
+                }
+              } else {
+                logger.warn({ ticket }, 'Break-even modify failed — will retry next cycle');
               }
             }
           }
@@ -90,6 +109,17 @@ class TradeMonitor {
   }
 
   async modifyStopLoss(ticket, newSl, tp) {
+    if (this.orchestrator.executionMode === 'paper') {
+      // Paper mode: directly update position in memory
+      const pos = paperTrading.openPositions.get(ticket);
+      if (pos) {
+        pos.sl = newSl;
+        if (tp) pos.tp = tp;
+        return true;
+      }
+      return false;
+    }
+
     if (this.orchestrator.executionMode === 'metaapi') {
       try {
         if (metaApiClient.rpcConnection) {
@@ -103,6 +133,11 @@ class TradeMonitor {
     return false;
   }
 
+  // Remove a ticket from breakEvenApplied when position closes (prevents stale entries)
+  onPositionClosed(ticket) {
+    this.breakEvenApplied.delete(ticket);
+  }
+
   stop() {
     this.isRunning = false;
     if (this.pollInterval) {
@@ -113,3 +148,4 @@ class TradeMonitor {
 }
 
 module.exports = new TradeMonitor();
+

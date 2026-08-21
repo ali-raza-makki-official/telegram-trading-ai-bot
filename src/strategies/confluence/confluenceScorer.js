@@ -3,11 +3,17 @@ const { computeAllIndicators } = require('../../indicators');
 const { analyzeSMC } = require('../smc');
 const { analyzeICT } = require('../ict');
 const { scanCandlestickPatterns } = require('../candlesticks');
+// FIX #32: Move module requires to top of file (not inside the scoring function)
+const dynamicConfig = require('../../config/dynamicConfig');
+const macroEngine = require('../../market-data/macroEngine');
 
 /**
  * Confluence & Signal Scorer
  * Aggregates multi-timeframe technical, SMC, ICT, candlestick, and correlation data
  * into a single unified score [-100 to +100] and structured trade setup payload.
+ *
+ * FIX #7: Weights are now normalized to exactly 100%
+ * FIX #32: requires moved to module top level
  */
 function scoreConfluence({
   symbol = 'XAUUSD',
@@ -48,14 +54,7 @@ function scoreConfluence({
     htfBias = htfSmc.bias;
   }
 
-  // Weight components
-  // 1. SMC: 30%
-  // 2. ICT: 25%
-  // 3. Candlesticks: 15%
-  // 4. Indicators (EMA, RSI, MACD): 15%
-  // 5. HTF Trend Alignment: 10%
-  // 6. Correlated Pairs Confirmation: 5%
-
+  // FIX #7: Indicator score clamped to [-100, +100] before weighting
   let indicatorScore = 0;
   if (indicators.emaBias === 'BULLISH') indicatorScore += 40;
   else if (indicators.emaBias === 'BEARISH') indicatorScore -= 40;
@@ -66,23 +65,30 @@ function scoreConfluence({
   if (indicators.rsiCondition === 'OVERSOLD') indicatorScore += 30;
   else if (indicators.rsiCondition === 'OVERBOUGHT') indicatorScore -= 30;
 
-  // Weight contributions dynamically loaded from DynamicConfigStore (Section 7 Spec)
-  const dynamicConfig = require('../../config/dynamicConfig');
+  // Clamp to [-100, +100]
+  indicatorScore = Math.max(-100, Math.min(100, indicatorScore));
+
+  // FIX #7: Weights normalized to exactly 100%
+  // SMC: 30%, ICT: 25%, Candles: 15%, Indicators: 15%, HTF: 10%, Correlation: 5%
   const wSmc = (dynamicConfig.get('weights.smc', 30.0) || 30.0) / 100;
   const wIct = (dynamicConfig.get('weights.ict', 25.0) || 25.0) / 100;
-  const wCandles = (dynamicConfig.get('weights.candlesticks', 20.0) || 20.0) / 100;
+  const wCandles = (dynamicConfig.get('weights.candlesticks', 15.0) || 15.0) / 100; // Was 20% — fixed to 15%
   const wInd = (dynamicConfig.get('weights.indicators', 15.0) || 15.0) / 100;
+  const wHtf = 0.10;  // HTF: 10%
+  const wCorr = 0.05; // Correlation: 5%
+  // Total: 30+25+15+15+10+5 = 100% ✓
+
   const smtWeight = dynamicConfig.get('weights.smt_divergence', 20.0) || 20.0;
 
   const smcContribution = (smc.score || 0) * wSmc;
   const ictContribution = (ict.score || 0) * wIct;
   const candleContribution = (candlesPattern.score || 0) * wCandles;
   const indicatorContribution = indicatorScore * wInd;
-  let htfScore = 0;
-  if (htfBias === 'BULLISH') htfScore = 50;
-  else if (htfBias === 'BEARISH') htfScore = -50;
 
-  const htfContribution = htfScore * 0.15;
+  let htfScore = 0;
+  if (htfBias === 'BULLISH') htfScore = 100;
+  else if (htfBias === 'BEARISH') htfScore = -100;
+  const htfContribution = htfScore * wHtf;
 
   // Correlation & Macro Sentiment
   let correlationScore = 0;
@@ -91,7 +97,6 @@ function scoreConfluence({
     else if (correlatedData.DXY.bias === 'BULLISH' || correlatedData.DXY.change > 0.1) correlationScore -= 50;
   }
   // SMT Divergence (Gold vs Silver)
-  const macroEngine = require('../../market-data/macroEngine');
   const silverCandles = candlesByTimeframe['XAGUSD'] || [];
   const smt = macroEngine.detectSMTDivergence(triggerCandles, silverCandles);
   if (smt) {
@@ -99,7 +104,7 @@ function scoreConfluence({
     else if (smt.bias === 'BEARISH') correlationScore -= smtWeight * 2;
   }
 
-  const correlationContribution = Math.max(-100, Math.min(100, correlationScore)) * 0.10;
+  const correlationContribution = Math.max(-100, Math.min(100, correlationScore)) * wCorr;
 
   // Total raw score [-100 to +100]
   const rawTotalScore =

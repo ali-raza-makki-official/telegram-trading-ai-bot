@@ -29,51 +29,52 @@ class AccuracyTracker {
 
       for (const c of subCandles) {
         if (isBullish) {
-          // Check SL hit
+          // Check SL hit first (takes priority)
           if (sl && c.low <= sl) {
             resolvedStatus = 'HIT_SL';
             outcomePrice = sl;
-            outcomePips = Number(((sl - entryPrice) * 10).toFixed(1)); // 1 pip = 0.1 for Gold
+            outcomePips = Number(((sl - entryPrice) * 10).toFixed(1)); // negative pips
             break;
           }
-          // Check TP2 hit
-          if (tp2 && c.high >= tp2) {
-            resolvedStatus = 'HIT_TP2';
-            outcomePrice = tp2;
-            outcomePips = Number(((tp2 - entryPrice) * 10).toFixed(1));
-            break;
-          }
-          // Check TP1 hit
+          // FIX #6: Check TP1 BEFORE TP2 — price hits TP1 first on the way to TP2
           if (tp1 && c.high >= tp1) {
-            resolvedStatus = 'HIT_TP1';
-            outcomePrice = tp1;
-            outcomePips = Number(((tp1 - entryPrice) * 10).toFixed(1));
+            // If same candle also passes TP2, still log as TP2 (full run)
+            if (tp2 && c.high >= tp2) {
+              resolvedStatus = 'HIT_TP2';
+              outcomePrice = tp2;
+              outcomePips = Number(((tp2 - entryPrice) * 10).toFixed(1));
+            } else {
+              resolvedStatus = 'HIT_TP1';
+              outcomePrice = tp1;
+              outcomePips = Number(((tp1 - entryPrice) * 10).toFixed(1));
+            }
             break;
           }
         } else if (isBearish) {
-          // Check SL hit
+          // Check SL hit first (takes priority)
           if (sl && c.high >= sl) {
             resolvedStatus = 'HIT_SL';
             outcomePrice = sl;
-            outcomePips = Number(((entryPrice - sl) * 10).toFixed(1));
+            outcomePips = Number(((entryPrice - sl) * 10).toFixed(1)); // negative pips
             break;
           }
-          // Check TP2 hit
-          if (tp2 && c.low <= tp2) {
-            resolvedStatus = 'HIT_TP2';
-            outcomePrice = tp2;
-            outcomePips = Number(((entryPrice - tp2) * 10).toFixed(1));
-            break;
-          }
-          // Check TP1 hit
+          // FIX #6: Check TP1 BEFORE TP2 — price hits TP1 first on the way to TP2
           if (tp1 && c.low <= tp1) {
-            resolvedStatus = 'HIT_TP1';
-            outcomePrice = tp1;
-            outcomePips = Number(((entryPrice - tp1) * 10).toFixed(1));
+            // If same candle also passes TP2, still log as TP2 (full run)
+            if (tp2 && c.low <= tp2) {
+              resolvedStatus = 'HIT_TP2';
+              outcomePrice = tp2;
+              outcomePips = Number(((entryPrice - tp2) * 10).toFixed(1));
+            } else {
+              resolvedStatus = 'HIT_TP1';
+              outcomePrice = tp1;
+              outcomePips = Number(((entryPrice - tp1) * 10).toFixed(1));
+            }
             break;
           }
         }
       }
+
 
       // Check Expiry (if > 30 bars passed without hitting target or SL)
       if (!resolvedStatus && subCandles.length >= 30) {

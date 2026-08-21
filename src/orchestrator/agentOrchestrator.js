@@ -30,11 +30,21 @@ class AgentOrchestrator {
     logger.info('Initializing Autonomous Trading Agent Core...');
 
     // 1. Initialize Database & Repositories
-    initDatabase();
+    // FIX #15: await initDatabase so schema migration completes before first DB operation
+    await initDatabase();
 
     // 2. Load dynamic settings from DB
     const savedMode = await SettingsRepo.get('autonomy_mode');
     if (savedMode) this.autonomyMode = savedMode;
+
+    // FIX #9a: Load isPaused from DB so pause state survives restarts
+    const savedPaused = await SettingsRepo.get('is_paused');
+    if (savedPaused !== null && savedPaused !== undefined) {
+      this.isPaused = Boolean(savedPaused);
+      if (this.isPaused) {
+        logger.warn('Bot started in PAUSED state (restored from database). Use /resume to activate.');
+      }
+    }
 
     // 3. Initialize Execution Layer (Paper / MetaApi Cloud / MT5 TCP)
     if (this.executionMode === 'paper') {
@@ -97,6 +107,7 @@ class AgentOrchestrator {
 
     logger.info(`Trading Agent initialized and running successfully with [${this.executionMode.toUpperCase()}] execution engine!`);
   }
+
 
   // Master Pipeline triggered on Candle Close
   async handleCandleClose(timeframe) {
@@ -199,6 +210,8 @@ class AgentOrchestrator {
     const entryPrice = signal.currentPrice;
     const sl = thesis.suggested_sl;
     const tp = thesis.suggested_tp1;
+    // FIX #31: Store TP2 for reference (partial close / trailing management)
+    const tp2 = thesis.suggested_tp2;
 
     const accountSummary = await this.getAccountSummary();
 
@@ -257,9 +270,16 @@ class AgentOrchestrator {
       });
     }
 
-    logger.info({ ticket: tradeResult.ticket, type, lot }, 'Trade successfully executed');
+    // FIX #9b: Null guard — prevent crash if execution engine returns null/undefined
+    if (!tradeResult) {
+      logger.error({ type, lot, sl, tp }, 'Execution engine returned null — trade may not have opened');
+      return { success: false, reasons: ['Execution engine returned no result. Check broker connection.'] };
+    }
+
+    logger.info({ ticket: tradeResult.ticket || tradeResult.id, type, lot, tp2 }, 'Trade successfully executed');
     return { success: true, trade: tradeResult };
   }
+
 
   async executeManualTrade({ symbol, type, lot, sl, tp }) {
     const currentPrice = marketFeed.getLatestPrice(symbol);

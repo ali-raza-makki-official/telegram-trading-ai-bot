@@ -50,12 +50,54 @@ class LLMManager {
     });
 
     // 4. Execute via Configured LLM Provider
-    if (this.primaryProvider === 'deepseek' && this.deepseek.isAvailable()) {
+    // FIX #10: Restructured so 'hybrid' mode is reachable before generic fallbacks
+    if (this.primaryProvider === 'hybrid') {
+      // Dual-model consensus — Claude + Gemini must both be available
+      if (this.claude.isAvailable() && this.gemini.isAvailable()) {
+        try {
+          const [claudeThesis, geminiThesis] = await Promise.all([
+            this.claude.generateThesis(promptText),
+            this.gemini.generateThesis(promptText),
+          ]);
+
+          if (claudeThesis.bias === geminiThesis.bias) {
+            return {
+              ...claudeThesis,
+              confidence: Math.round((claudeThesis.confidence + geminiThesis.confidence) / 2),
+              reasoning: `[Consensus Claude+Gemini]: ${claudeThesis.reasoning}`,
+            };
+          } else {
+            // Disagreement → Downgrade confidence
+            return {
+              bias: 'NEUTRAL',
+              confidence: 40,
+              primary_setup: `Model Disagreement: Claude (${claudeThesis.bias}) vs Gemini (${geminiThesis.bias})`,
+              reasoning: `Models disagreed on market direction. Claude suggested ${claudeThesis.bias} while Gemini suggested ${geminiThesis.bias}. Holding neutral.`,
+              invalidation_level: null,
+              entry_zone: null,
+              suggested_sl: null,
+              suggested_tp1: null,
+              suggested_tp2: null,
+              risk_reward_ratio: null,
+              timeframe_alignment_summary: 'Conflicted models',
+              caution_flags: ['AI Consensus Conflict: Trade skipped'],
+            };
+          }
+        } catch (err) {
+          logger.error({ err: err.message }, 'Hybrid consensus error — falling back to DeepSeek');
+        }
+      }
+      // Hybrid fallback if one model unavailable
+      if (this.deepseek.isAvailable()) {
+        return await this.deepseek.generateThesis(promptText);
+      }
+    } else if (this.primaryProvider === 'deepseek' && this.deepseek.isAvailable()) {
       try {
         return await this.deepseek.generateThesis(promptText);
       } catch (err) {
         logger.warn('DeepSeek failed, attempting Gemini fallback');
         if (this.gemini.isAvailable()) return await this.gemini.generateThesis(promptText);
+        if (this.claude.isAvailable()) return await this.claude.generateThesis(promptText);
       }
     } else if (this.primaryProvider === 'claude' && this.claude.isAvailable()) {
       try {
@@ -73,47 +115,28 @@ class LLMManager {
         if (this.deepseek.isAvailable()) return await this.deepseek.generateThesis(promptText);
         if (this.claude.isAvailable()) return await this.claude.generateThesis(promptText);
       }
-    } else if (this.deepseek.isAvailable()) {
-      // Auto fallback to DeepSeek if configured
-      try {
-        return await this.deepseek.generateThesis(promptText);
-      } catch (err) {
-        logger.warn({ err: err.message }, 'DeepSeek auto-provider error');
-      }
-    } else if (this.primaryProvider === 'hybrid' && this.claude.isAvailable() && this.gemini.isAvailable()) {
-      // Dual-model consensus
-      try {
-        const [claudeThesis, geminiThesis] = await Promise.all([
-          this.claude.generateThesis(promptText),
-          this.gemini.generateThesis(promptText),
-        ]);
-
-        // Check if both agree
-        if (claudeThesis.bias === geminiThesis.bias) {
-          return {
-            ...claudeThesis,
-            confidence: Math.round((claudeThesis.confidence + geminiThesis.confidence) / 2),
-            reasoning: `[Consensus Claude+Gemini]: ${claudeThesis.reasoning}`,
-          };
-        } else {
-          // Disagreement -> Downgrade confidence
-          return {
-            bias: 'NEUTRAL',
-            confidence: 40,
-            primary_setup: `Model Disagreement: Claude (${claudeThesis.bias}) vs Gemini (${geminiThesis.bias})`,
-            reasoning: `Models disagreed on market direction. Claude suggested ${claudeThesis.bias} while Gemini suggested ${geminiThesis.bias}. Holding neutral.`,
-            invalidation_level: null,
-            entry_zone: null,
-            suggested_sl: null,
-            suggested_tp1: null,
-            suggested_tp2: null,
-            risk_reward_ratio: null,
-            timeframe_alignment_summary: 'Conflicted models',
-            caution_flags: ['AI Consensus Conflict: Trade skipped'],
-          };
+    } else {
+      // Generic auto-fallback: try each available provider in order
+      if (this.deepseek.isAvailable()) {
+        try {
+          return await this.deepseek.generateThesis(promptText);
+        } catch (err) {
+          logger.warn({ err: err.message }, 'DeepSeek auto-fallback failed');
         }
-      } catch (err) {
-        logger.error({ err: err.message }, 'Hybrid consensus error');
+      }
+      if (this.gemini.isAvailable()) {
+        try {
+          return await this.gemini.generateThesis(promptText);
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Gemini auto-fallback failed');
+        }
+      }
+      if (this.claude.isAvailable()) {
+        try {
+          return await this.claude.generateThesis(promptText);
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Claude auto-fallback failed');
+        }
       }
     }
 

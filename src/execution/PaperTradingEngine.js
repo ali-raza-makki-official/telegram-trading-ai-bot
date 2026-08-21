@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const config = require('../config');
-const { TradeRepo } = require('../database');
+const { TradeRepo, SettingsRepo } = require('../database');
 const logger = require('../utils/logger');
 
 class PaperTradingEngine {
@@ -13,12 +13,40 @@ class PaperTradingEngine {
   }
 
   async init() {
+    // FIX #5: Load persisted balance from database so restarts don't reset it
+    const savedBalance = await SettingsRepo.get('paper_balance');
+    if (savedBalance !== null && !isNaN(Number(savedBalance))) {
+      this.balance = Number(savedBalance);
+      logger.info({ balance: this.balance }, 'Paper Trading Engine: Restored balance from database');
+    } else {
+      // First-time: persist starting balance
+      await SettingsRepo.set('paper_balance', this.balance);
+      logger.info({ balance: this.balance }, 'Paper Trading Engine: Using starting balance from config');
+    }
+
+    // FIX #5: Load persisted dailyPnl (reset if it's a new day)
+    const savedDailyPnlDate = await SettingsRepo.get('paper_daily_pnl_date');
+    const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    if (savedDailyPnlDate === todayStr) {
+      const savedDailyPnl = await SettingsRepo.get('paper_daily_pnl');
+      if (savedDailyPnl !== null) {
+        this.dailyPnl = Number(savedDailyPnl);
+      }
+    } else {
+      // New day — reset dailyPnl and record today's date
+      this.dailyPnl = 0;
+      await SettingsRepo.set('paper_daily_pnl', 0);
+      await SettingsRepo.set('paper_daily_pnl_date', todayStr);
+    }
+
+    this.equity = this.balance;
+
     // Load open trades from DB
     const existing = await TradeRepo.getOpen();
     for (const t of existing) {
       this.openPositions.set(t.id, t);
     }
-    logger.info({ openTradesCount: this.openPositions.size, balance: this.balance }, 'Paper Trading Engine initialized');
+    logger.info({ openTradesCount: this.openPositions.size, balance: this.balance, dailyPnl: this.dailyPnl }, 'Paper Trading Engine initialized');
   }
 
   getAccountSummary() {
@@ -83,6 +111,10 @@ class PaperTradingEngine {
     this.balance = Number((this.balance + pnl).toFixed(2));
     this.dailyPnl = Number((this.dailyPnl + pnl).toFixed(2));
 
+    // FIX #5: Persist updated balance and dailyPnl to database
+    await SettingsRepo.set('paper_balance', this.balance);
+    await SettingsRepo.set('paper_daily_pnl', this.dailyPnl);
+
     await TradeRepo.close(id, {
       closePrice,
       pnl,
@@ -95,6 +127,7 @@ class PaperTradingEngine {
     logger.info({ ticket: pos.ticket, pnl, reason, balance: this.balance }, 'Closed Paper Trade');
     return { ...pos, closePrice, pnl, reason };
   }
+
 
   // Check SL/TP on price tick
   async onTick(symbol, currentPrice) {

@@ -18,6 +18,24 @@ class TelegramBotService {
     this.bot = null;
     this.isPolling = false;
     this.pendingApprovals = new Map(); // approvalId -> { signal, timeout }
+
+    // FIX #13a: Initialize in constructor (not lazily in callback handler)
+    // FIX #13b: Use time-based Map for expiry — prevents infinite memory growth
+    // Map<token, expiryTimestamp>
+    this.processedActionTokens = new Map();
+    this._startTokenCleanup();
+  }
+
+  // FIX #13b: Clean expired tokens every 15 minutes to prevent memory leak
+  _startTokenCleanup() {
+    setInterval(() => {
+      const now = Date.now();
+      for (const [token, expiry] of this.processedActionTokens.entries()) {
+        if (now > expiry) {
+          this.processedActionTokens.delete(token);
+        }
+      }
+    }, 15 * 60 * 1000); // every 15 minutes
   }
 
   async init() {
@@ -367,13 +385,47 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
 `;
       await ctx.reply(msg, { parse_mode: 'Markdown' });
     });
+
+    // FIX #28: /history — was listed in /start menu but handler was missing
+    this.bot.command('history', async (ctx) => {
+      try {
+        const accuracyTracker = require('../evaluator/accuracyTracker');
+        const report = await accuracyTracker.getPerformanceReport();
+        const recent = report.recent || [];
+        const stats = report.stats || {};
+
+        let msg = `📜 *Recent Prediction History (Last 10):*\n\n`;
+
+        if (recent.length === 0) {
+          msg += '_No predictions recorded yet._\n';
+        } else {
+          for (const p of recent) {
+            const icon = p.status === 'HIT_TP1' || p.status === 'HIT_TP2' ? '✅' : p.status === 'HIT_SL' ? '❌' : '⏳';
+            const pips = p.outcome_pips !== null ? `${p.outcome_pips > 0 ? '+' : ''}${p.outcome_pips} pips` : 'Pending';
+            msg += `${icon} *${p.bias}* (${p.timeframe}) — ${p.primary_setup || 'Unknown Setup'}\n`;
+            msg += `   Status: \`${p.status || 'PENDING'}\` | Pips: \`${pips}\` | @ $${Number(p.price_at_prediction || 0).toFixed(2)}\n\n`;
+          }
+        }
+
+        if (stats.total > 0) {
+          const winRate = ((stats.wins / stats.total) * 100).toFixed(1);
+          msg += `\n📊 *Overall Stats:*\n• Total: ${stats.total} | Wins: ${stats.wins} | Losses: ${stats.losses}\n• Win Rate: \`${winRate}%\`\n• Total Pips: \`${stats.total_pips > 0 ? '+' : ''}${stats.total_pips}\``;
+        }
+
+        const kb = new InlineKeyboard()
+          .text('🎯 Full Accuracy Report', 'ACTION:ANALYZE_15m')
+          .text('💼 Account Status', 'ACTION:STATUS');
+
+        await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+      } catch (err) {
+        logger.error({ err: err.message }, 'Failed to fetch prediction history');
+        await ctx.reply(`❌ Could not load history: ${err.message}`);
+      }
+    });
   }
 
-  setupCallbackQueries() {
-    if (!this.processedActionTokens) {
-      this.processedActionTokens = new Set();
-    }
 
+  setupCallbackQueries() {
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
 
@@ -387,11 +439,15 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         const quotePrice = parseFloat(quotePriceStr) || null;
         const timestamp = parseInt(timestampStr, 10) || null;
 
-        // Idempotency / Double-Click Lock
-        if (token && this.processedActionTokens.has(token)) {
-          return ctx.answerCallbackQuery({ text: '⚠️ Order already processed or in execution.', show_alert: true });
+        // FIX #13b: Idempotency / Double-Click Lock using time-based token expiry
+        if (token) {
+          const now = Date.now();
+          if (this.processedActionTokens.has(token) && this.processedActionTokens.get(token) > now) {
+            return ctx.answerCallbackQuery({ text: '⚠️ Order already processed or in execution.', show_alert: true });
+          }
+          // Store token with 10-minute expiry
+          this.processedActionTokens.set(token, now + 10 * 60 * 1000);
         }
-        if (token) this.processedActionTokens.add(token);
 
         // Time Expiration Check (Max 3 minutes validity)
         if (timestamp && Date.now() - timestamp > 180000) {
@@ -707,21 +763,15 @@ ${thesis.reasoning}
 
     // 5. Hands-Free Voice Notes Trading (Urdu / English Audio Intent)
     this.bot.on('message:voice', async (ctx) => {
-      await ctx.reply('🎙️ *Voice Note Received:* Processing audio trading intent with DeepSeek AI...', { parse_mode: 'Markdown' });
+      await ctx.reply('🎙️ *Voice Note Received:* Processing audio trading intent with AI...', { parse_mode: 'Markdown' });
       try {
-        const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
+        const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 0);
+        if (!exactPrice) {
+          return ctx.reply('⚠️ Live price unavailable. Please try again shortly.');
+        }
         const AgentMemory = require('../memory/agentMemory');
-        const voiceQuery = `User sent a voice message about Gold trading and current market position. Perform a complete SMC/ICT multi-timeframe analysis and give actionable guidance.`;
-        
+        // FIX #21: Removed dead code — DeepSeekProvider was created but never used below
         AgentMemory.addChatMessage(ctx.chat.id, 'user', '[Voice Note: Trading Query]');
-        const fullContext = await AgentMemory.buildFullContext({
-          chatId: ctx.chat.id,
-          orchestrator: this.orchestrator,
-          primarySymbol: config.system.primarySymbol,
-        });
-
-        const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
-        const ds = new DeepSeekProvider();
 
         const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, '15m');
         await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, '15m', thesis);
@@ -739,6 +789,7 @@ ${thesis.reasoning}
         await ctx.reply(`⚠️ Could not process voice note: ${err.message}`);
       }
     });
+
   }
 
   // Render & Deliver Visual TradingView-Style SMC Candlestick Chart Photo

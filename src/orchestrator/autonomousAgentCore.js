@@ -94,7 +94,7 @@ Return your decision strictly in JSON matching this schema:
       : `Trigger: ${triggerSource}. Review current live market and open positions, formulate your next move, and decide whether to trade, manage risk, or wait.`;
 
     const dsPayload = {
-      model: config.llm.deepseek.model || 'deepseek-v4-pro',
+      model: config.llm.deepseek.model || 'deepseek-chat', // FIX #12: Use config value (now 'deepseek-chat')
       messages: [
         { role: 'system', content: autonomousSystemPrompt },
         { role: 'user', content: userPrompt },

@@ -61,8 +61,13 @@ class PureJsStorage {
 let storage = null;
 let mysqlPool = null;
 let isMysql = false;
+let dbInitialized = false;
 
-function initDatabase() {
+// FIX #15: initDatabase is now async and awaits MySQL migrations
+// Caller should await this before making any DB operations
+async function initDatabase() {
+  if (dbInitialized) return; // idempotent
+
   if (config.database.type === 'mysql') {
     try {
       const mysql = require('mysql2/promise');
@@ -79,7 +84,9 @@ function initDatabase() {
       });
 
       logger.info('MySQL Database pool initialized');
-      runMysqlMigrations(mysqlPool);
+      // FIX #15: AWAIT the migration so schema is ready before first query
+      await runMysqlMigrations(mysqlPool);
+      dbInitialized = true;
       return;
     } catch (err) {
       logger.warn({ err }, 'Failed to initialize MySQL, falling back to pure JS local storage');
@@ -90,6 +97,7 @@ function initDatabase() {
   const dbPath = config.database.sqlitePath.replace(/\.db$/, '.json');
   storage = new PureJsStorage(dbPath);
   storage.init();
+  dbInitialized = true;
 }
 
 async function runMysqlMigrations(pool) {

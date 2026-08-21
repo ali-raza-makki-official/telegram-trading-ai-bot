@@ -13,6 +13,13 @@ class MetaApiClient extends EventEmitter {
     this.rpcConnection = null;
     this.isConnected = false;
     this.isConnecting = false;
+    // FIX #14: Exponential backoff reconnect tracking
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.baseReconnectDelayMs = 5000;
+    // FIX #4: Daily PnL tracking (session-based)
+    this.sessionStartBalance = null;
+    this.dailyPnlCache = 0;
   }
 
   isConfigured() {
@@ -63,12 +70,23 @@ class MetaApiClient extends EventEmitter {
       await this.rpcConnection.connect();
       await this.rpcConnection.waitSynchronized();
 
+      this.reconnectAttempts = 0; // Reset on success
       this.isConnected = true;
       this.isConnecting = false;
 
       // Auto-discover broker symbol (e.g. XAUUSDm on Exness)
       this.brokerSymbols = await this.rpcConnection.getSymbols();
       this.resolvedSymbol = this.resolveSymbol(config.system.primarySymbol);
+
+      // FIX #4: Record session start balance for dailyPnl calculation
+      try {
+        const info = this.streamingConnection?.terminalState?.accountInformation
+          || await this.rpcConnection?.getAccountInformation();
+        if (info?.balance) {
+          this.sessionStartBalance = info.balance;
+          logger.info({ sessionStartBalance: this.sessionStartBalance }, 'Session start balance recorded for daily PnL tracking');
+        }
+      } catch (_) {}
 
       logger.info({
         brokerServer: this.account.server,
@@ -112,10 +130,25 @@ class MetaApiClient extends EventEmitter {
     } catch (err) {
       this.isConnecting = false;
       this.isConnected = false;
-      logger.error({ err: err.message }, 'MetaApi Cloud connection error');
+      this.reconnectAttempts++;
+      logger.error({ err: err.message, attempt: this.reconnectAttempts }, 'MetaApi Cloud connection error');
       this.emit('error', err);
-      // Auto reconnect after 10 seconds
-      setTimeout(() => this.connect(), 10000);
+
+      // FIX #14: Exponential backoff with max attempt limit
+      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        logger.error(
+          { attempts: this.reconnectAttempts },
+          `MetaApi reconnect gave up after ${this.maxReconnectAttempts} attempts. Check METAAPI_API_TOKEN and METAAPI_ACCOUNT_ID.`
+        );
+        return; // Stop reconnecting — prevents infinite loop
+      }
+
+      const delay = Math.min(
+        this.baseReconnectDelayMs * Math.pow(2, this.reconnectAttempts - 1),
+        5 * 60 * 1000 // Max 5 minute wait
+      );
+      logger.info({ delay: Math.round(delay / 1000) + 's', attempt: this.reconnectAttempts }, 'Scheduling MetaApi reconnect...');
+      setTimeout(() => this.connect(), delay);
     }
   }
 
@@ -175,15 +208,27 @@ class MetaApiClient extends EventEmitter {
         floatingPnl += p.floatingPnl || 0;
       }
 
+      const currentBalance = info?.balance || 0;
+
+      // FIX #4: Calculate actual daily PnL as (current balance - session start balance)
+      // sessionStartBalance is recorded when we first connect each session
+      if (this.sessionStartBalance === null && currentBalance > 0) {
+        this.sessionStartBalance = currentBalance;
+      }
+      const dailyPnl = this.sessionStartBalance
+        ? Number((currentBalance - this.sessionStartBalance).toFixed(2))
+        : 0;
+
       return {
-        balance: info?.balance || 0,
-        equity: info?.equity || ((info?.balance || 0) + floatingPnl),
+        balance: currentBalance,
+        equity: info?.equity || (currentBalance + floatingPnl),
         floatingPnl: Number(floatingPnl.toFixed(2)),
-        dailyPnl: 0,
+        dailyPnl,
         openPositionsCount: positions.length,
         currency: info?.currency || 'USD',
         server: info?.server || 'MetaApi-Cloud',
       };
+
     } catch (err) {
       logger.error({ err: err.message }, 'Failed to fetch MetaApi account summary');
       return {

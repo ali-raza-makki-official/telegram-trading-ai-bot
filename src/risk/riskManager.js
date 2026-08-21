@@ -1,6 +1,7 @@
 const config = require('../config');
 const { TradeRepo } = require('../database');
 const { getCurrentSessionInfo } = require('../strategies/ict/killzones');
+const newsFilter = require('./newsFilter'); // FIX #8: Import newsFilter
 const logger = require('../utils/logger');
 
 class RiskManager {
@@ -80,6 +81,12 @@ class RiskManager {
       reasons.push(`Trade rejected: Approaching Friday market close (${session.minutesToFridayClose} mins remaining). New entries are frozen.`);
     }
 
+    // 7. FIX #8: High-Impact News Blackout Check
+    const newsStatus = newsFilter.isNewsBlackoutActive();
+    if (newsStatus.isBlackout) {
+      reasons.push(`Trade rejected: High-impact news blackout active — ${newsStatus.event} (${newsStatus.state}). Trading paused for safety.`);
+    }
+
     return {
       isValid: reasons.length === 0,
       reasons,
@@ -88,3 +95,4 @@ class RiskManager {
 }
 
 module.exports = new RiskManager();
+
