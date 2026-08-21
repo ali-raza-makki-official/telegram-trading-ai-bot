@@ -62,11 +62,18 @@ class AutonomousAgentCore {
     let systemPrompt = '';
     let userPromptText = '';
 
+    const historyText = situationContext.conversationHistory && situationContext.conversationHistory.length > 0
+      ? situationContext.conversationHistory.map(m => `[${m.role.toUpperCase()}]: ${m.content}`).join('\n')
+      : 'No previous history recorded yet.';
+
     if (isDeepThinking) {
       // Deep Institutional Strategic Reasoning
       systemPrompt = `
 You are an Autonomous Gold (XAU/USD) Trading AI Agent & Fund Manager for Ali Raza in Telegram.
 MODE: DEEP INSTITUTIONAL THINKING & SETUP SYNTHESIS.
+
+LONG-TERM CONVERSATION HISTORY (From Day 1):
+${historyText}
 
 LIVE MARKET & BROKER SNAPSHOT:
 - Gold Price: $${livePrice.toFixed(2)} USD (Exness MT5)
@@ -76,12 +83,14 @@ LIVE MARKET & BROKER SNAPSHOT:
 - Macro State (DXY, Silver SMT, Yields): ${JSON.stringify(situationContext.macroSnapshot)}
 - Autonomy Mode: "${autonomyMode.toUpperCase()}"
 
-MANDATE:
+MANDATE & INSTRUCTIONS:
+- You have CONTINUOUS, PERMANENT MEMORY of all past discussions with Ali Raza. Always reference past questions, preferences, and orders seamlessly.
 - Perform deep multi-timeframe reasoning, identify Order Blocks, FVGs, Liquidity Sweeps, and SMT Divergences.
 - Formulate a clear trade bias (BUY/SELL/HOLD) with exact Entry, SL, TP, and R:R.
 - If Autonomy Mode is "AUTO", you can set "action_type": "EXECUTE_TRADE".
 - If Autonomy Mode is "SEMI", set "action_type": "REQUEST_APPROVAL".
 - Reply in natural, senior institutional Roman Urdu / Urdu.
+- ALWAYS generate 2-4 DYNAMIC interactive buttons ("interactive_buttons") tailored specifically to your reply (e.g. ACTION:ZONES, ACTION:ANALYZE_15m, ACTION:STATUS, ACTION:POSITIONS).
 
 Output format strictly JSON:
 {
@@ -98,7 +107,7 @@ Output format strictly JSON:
     "rationale": string
   },
   "interactive_buttons": [
-    { "text": "Button Label", "action": "ACTION_STRING" }
+    { "text": "🎯 Contextual Button Label", "action": "ACTION:ZONES" }
   ]
 }`;
       userPromptText = userQuery || `Trigger: ${triggerSource}. Synthesize institutional market thesis.`;
@@ -106,7 +115,10 @@ Output format strictly JSON:
       // Lightweight Fast Chat (Low Tokens, Instant Response)
       systemPrompt = `
 You are an intelligent Gold Trading AI Assistant chatting with Ali Raza on Telegram.
-MODE: FAST LIGHTWEIGHT CONVERSATION (Token-Saving Active).
+MODE: FAST CONVERSATION & MEMORY SYNTHESIS.
+
+LONG-TERM CONVERSATION HISTORY (From Day 1):
+${historyText}
 
 QUICK SNAPSHOT:
 - Gold Price: $${livePrice.toFixed(2)} USD
@@ -114,14 +126,14 @@ QUICK SNAPSHOT:
 - Open Positions: ${situationContext.openPositions.length} active
 - Session: ${situationContext.marketSession?.sessionName || 'Active'}
 
-MANDATE:
+MANDATE & INSTRUCTIONS:
+- You have PERMANENT MEMORY of all past discussions with Ali Raza. Understand conversational context and follow his orders naturally.
 - Give a concise, friendly, and smart response in Roman Urdu / Urdu.
-- For simple greetings, questions, or status queries, be prompt and direct.
-- Do not dump huge essays. Keep it under 2-3 short paragraphs.
+- Always include 2-4 customized dynamic interactive buttons ("interactive_buttons") relevant to what you just recommended.
 
 Output format strictly JSON:
 {
-  "thought_process": "Quick conversational check",
+  "thought_process": "Quick conversational check with past memory",
   "reply": "Your natural, concise response",
   "action_type": "NONE",
   "trade_decision": { "action": "HOLD" },

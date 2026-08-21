@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { TradeRepo, PredictionRepo, SettingsRepo } = require('../database');
 const candleManager = require('../market-data/candleManager');
 const marketFeed = require('../market-data/marketFeed');
@@ -6,27 +8,65 @@ const { calculateEMA, calculateRSI, calculateATR } = require('../indicators');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-// In-memory conversation history cache: chatId -> [{ role, content, timestamp }]
-const chatHistories = new Map();
+const HISTORY_FILE = path.resolve(process.cwd(), 'data', 'conversation_history.json');
+
+// Persistent Chat History Store
+let persistentHistories = {};
+
+function loadHistories() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const raw = fs.readFileSync(HISTORY_FILE, 'utf8');
+      persistentHistories = JSON.parse(raw);
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Failed loading conversation_history.json, starting fresh');
+    persistentHistories = {};
+  }
+}
+
+function saveHistories() {
+  try {
+    const dir = path.dirname(HISTORY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(persistentHistories, null, 2), 'utf8');
+  } catch (err) {
+    logger.error({ err: err.message }, 'Failed saving conversation_history.json');
+  }
+}
+
+// Initial load
+loadHistories();
 
 class AgentMemory {
-  // 1. Record conversation turn
+  // 1. Record conversation turn (Persistent Long-Term Memory)
   static addChatMessage(chatId, role, content) {
-    if (!chatId) return;
-    if (!chatHistories.has(chatId)) {
-      chatHistories.set(chatId, []);
+    if (!chatId || !content) return;
+    const key = String(chatId);
+    if (!persistentHistories[key]) {
+      persistentHistories[key] = [];
     }
-    const history = chatHistories.get(chatId);
-    history.push({ role, content, timestamp: Date.now() });
-    if (history.length > 20) {
-      history.shift(); // keep last 20 messages
+    persistentHistories[key].push({
+      role,
+      content,
+      timestamp: Date.now(),
+      isoTime: new Date().toISOString(),
+    });
+
+    // Retain up to 200 messages per user for deep context
+    if (persistentHistories[key].length > 200) {
+      persistentHistories[key].shift();
     }
+
+    saveHistories();
   }
 
-  // 2. Retrieve recent chat context
-  static getChatHistory(chatId, limit = 8) {
-    if (!chatId || !chatHistories.has(chatId)) return [];
-    return chatHistories.get(chatId).slice(-limit);
+  // 2. Retrieve recent & long-term chat context
+  static getChatHistory(chatId, limit = 20) {
+    if (!chatId) return [];
+    const key = String(chatId);
+    if (!persistentHistories[key]) return [];
+    return persistentHistories[key].slice(-limit);
   }
 
   // 3. Build Detailed Multi-Timeframe Technical & SMC Matrix
@@ -59,143 +99,85 @@ class AgentMemory {
       const rsiVal = Array.isArray(rawRsi) ? rawRsi[rawRsi.length - 1] : rawRsi;
       const atrVal = Array.isArray(rawAtr) ? rawAtr[rawAtr.length - 1] : rawAtr;
 
-      // Structure calculation
-      const recentHigh = Math.max(...highs.slice(-20));
-      const recentLow = Math.min(...lows.slice(-20));
-      const equilibrium = (recentHigh + recentLow) / 2;
-      const isPremium = currentCandle.close > equilibrium;
-
-      // Trend definition
-      let trend = 'NEUTRAL';
-      if (ema20Val && ema50Val) {
-        if (currentCandle.close > ema20Val && ema20Val > ema50Val) trend = 'BULLISH';
-        else if (currentCandle.close < ema20Val && ema20Val < ema50Val) trend = 'BEARISH';
-      }
-
-      // Detect Candlestick Formations
-      const isBullishEngulfing = prevCandle.close < prevCandle.open &&
-        currentCandle.close > currentCandle.open &&
-        currentCandle.close > prevCandle.open &&
-        currentCandle.open < prevCandle.close;
-
-      const isBearishEngulfing = prevCandle.close > prevCandle.open &&
-        currentCandle.close < currentCandle.open &&
-        currentCandle.close < prevCandle.open &&
-        currentCandle.open > prevCandle.close;
-
-      const body = Math.abs(currentCandle.close - currentCandle.open);
-      const upperWick = currentCandle.high - Math.max(currentCandle.open, currentCandle.close);
-      const lowerWick = Math.min(currentCandle.open, currentCandle.close) - currentCandle.low;
-      const isPinbarBull = lowerWick > body * 2 && upperWick < body;
-      const isPinbarBear = upperWick > body * 2 && lowerWick < body;
+      const isBullishStructure = closes[closes.length - 1] > closes[0];
+      const isHigherHigh = currentCandle.high > prevCandle.high;
+      const isHigherLow = currentCandle.low > prevCandle.low;
 
       matrix[tf] = {
-        close: currentCandle.close,
-        trend,
-        zone: isPremium ? 'PREMIUM (Sell Preferred)' : 'DISCOUNT (Buy Preferred)',
-        equilibrium: equilibrium.toFixed(2),
-        support: recentLow.toFixed(2),
-        resistance: recentHigh.toFixed(2),
-        ema20: typeof ema20Val === 'number' ? ema20Val.toFixed(2) : null,
-        ema50: typeof ema50Val === 'number' ? ema50Val.toFixed(2) : null,
-        ema200: typeof ema200Val === 'number' ? ema200Val.toFixed(2) : null,
-        rsi: typeof rsiVal === 'number' ? rsiVal.toFixed(1) : null,
-        atr: typeof atrVal === 'number' ? atrVal.toFixed(2) : null,
-        candlestick: isBullishEngulfing ? 'Bullish Engulfing' : isBearishEngulfing ? 'Bearish Engulfing' : isPinbarBull ? 'Bullish Pinbar (Hammer)' : isPinbarBear ? 'Bearish Pinbar (Shooting Star)' : 'Normal',
+        lastClose: currentCandle.close,
+        trend: isBullishStructure ? 'BULLISH' : 'BEARISH',
+        structure: isHigherHigh && isHigherLow ? 'BULLISH_EXPANSION' : 'CONSOLIDATION',
+        ema20: ema20Val ? Number(ema20Val.toFixed(2)) : null,
+        ema50: ema50Val ? Number(ema50Val.toFixed(2)) : null,
+        ema200: ema200Val ? Number(ema200Val.toFixed(2)) : null,
+        rsi: rsiVal ? Number(rsiVal.toFixed(2)) : null,
+        atr: atrVal ? Number(atrVal.toFixed(2)) : null,
       };
     }
 
     return matrix;
   }
 
-  // 4. Retrieve Comprehensive Trade & Memory History
-  static async getTradeAndMemorySummary() {
-    const stats = await PredictionRepo.getStats();
-    const recentTrades = await TradeRepo.getRecent(10);
+  // 4. Retrieve Comprehensive Context for LLM Reasoning
+  static async getComprehensiveContext({ symbol = config.system.primarySymbol, chatId = null }) {
+    const livePrice = Number(marketFeed.getLatestPrice(symbol) || 4580.0);
+    const sessionInfo = getCurrentSessionInfo();
+    const correlatedData = marketFeed.getCorrelatedData();
+    const multiTf = this.getMultiTimeframeAnalysis(symbol);
 
-    const wins = recentTrades.filter(t => (t.pnl || 0) > 0);
-    const losses = recentTrades.filter(t => (t.pnl || 0) < 0);
-    const breakEvens = recentTrades.filter(t => (t.pnl || 0) === 0);
+    let recentTrades = [];
+    let recentPredictions = [];
+    let learnedSkills = {};
 
-    const totalProfit = wins.reduce((acc, t) => acc + (t.pnl || 0), 0);
-    const totalLoss = losses.reduce((acc, t) => acc + (t.pnl || 0), 0);
+    try {
+      recentTrades = await TradeRepo.getRecent(5);
+      recentPredictions = await PredictionRepo.getRecent(5);
+    } catch {}
+
+    try {
+      const postTradeLearner = require('../orchestrator/postTradeLearner');
+      learnedSkills = postTradeLearner.getSkillsSummary();
+    } catch {}
+
+    const chatHistory = chatId ? this.getChatHistory(chatId, 25) : [];
 
     return {
-      totalPredictions: stats.total,
-      winRate: stats.winRate,
-      winCount: stats.winCount,
-      lossCount: stats.lossCount,
-      totalPips: stats.totalPips,
-      recentTradesCount: recentTrades.length,
-      recentWins: wins.length,
-      recentLosses: losses.length,
-      recentBreakEvens: breakEvens.length,
-      recentRealizedPnL: (totalProfit + totalLoss).toFixed(2),
-      lastTrades: recentTrades.slice(0, 5).map(t => ({
-        ticket: t.ticket || t.id,
-        type: t.type,
-        lot: t.lot,
-        entry: t.entryPrice,
-        close: t.closePrice,
-        pnl: t.pnl,
-        status: t.status,
-      })),
+      asset: symbol,
+      livePrice,
+      session: sessionInfo,
+      macroCorrelation: correlatedData,
+      timeframeMatrix: multiTf,
+      recentTrades,
+      recentPredictions,
+      learnedSkills,
+      conversationHistory: chatHistory,
     };
   }
 
-  // 5. Build Complete Institutional Knowledge Context for DeepSeek
-  static async buildFullContext({ chatId, orchestrator, primarySymbol = 'XAUUSD' }) {
-    const summary = await orchestrator.getStatusSummary();
-    const exactPrice = Number(marketFeed.getLatestPrice(primarySymbol) || 4518.74);
-    const session = getCurrentSessionInfo();
-    const technicalMatrix = this.getMultiTimeframeAnalysis(primarySymbol);
-    const tradeHistory = await this.getTradeAndMemorySummary();
-    const openPositions = await orchestrator.getOpenPositions();
-    const recentChat = this.getChatHistory(chatId, 8);
-    const macroEngine = require('../market-data/macroEngine');
-    const macroSnapshot = macroEngine.getMacroSnapshot();
+  // 5. Build Full Context (Chat Memory + Broker State + Technicals)
+  static async buildFullContext({ chatId = null, orchestrator = null, primarySymbol = config.system.primarySymbol }) {
+    const base = await this.getComprehensiveContext({ symbol: primarySymbol, chatId });
+    let broker = { balance: 463.68, equity: 463.68, openPositionsCount: 0 };
+    let openPositions = [];
 
-    // SMT Divergence Check between 15m Gold and Silver
-    const gold15m = candleManager.getCandles(primarySymbol, '15m');
-    const silver15m = candleManager.getCandles('XAGUSD', '15m');
-    const smtDivergence = macroEngine.detectSMTDivergence(gold15m, silver15m);
+    if (orchestrator) {
+      try {
+        broker = await orchestrator.getAccountSummary();
+        openPositions = await orchestrator.getOpenPositions();
+      } catch {}
+    }
 
     return {
-      asset: primarySymbol,
-      livePrice: exactPrice,
-      broker: {
-        server: orchestrator.executionMode === 'metaapi' ? 'Exness-MT5Trial16' : 'Paper Engine',
-        balance: summary.account.balance,
-        equity: summary.account.equity,
-        floatingPnl: summary.account.floatingPnl || 0,
-        margin: summary.account.margin || 0,
-        freeMargin: summary.account.freeMargin || summary.account.balance,
-        leverage: '1:2000',
-      },
-      openPositions: openPositions.map(p => ({
-        ticket: p.ticket || p.id,
-        type: p.type,
-        volume: p.volume || p.lot,
-        openPrice: p.openPrice || p.price,
-        sl: p.stopLoss,
-        tp: p.takeProfit,
-        profit: p.profit || 0,
-      })),
-      marketSession: {
-        sessionName: session.marketSession,
-        killzone: session.activeKillzone ? session.activeKillzone.name : 'Standard Liquidity Window',
-        utcTime: session.utcTime,
-        isWeekend: session.isWeekend,
-        minutesToFridayClose: session.minutesToFridayClose,
-      },
-      technicalMatrix,
-      macroSnapshot,
-      smtDivergence,
-      tradeHistory,
-      recentChat,
+      broker,
+      openPositions,
+      technicalMatrix: base.timeframeMatrix,
+      macroSnapshot: base.macroCorrelation,
+      marketSession: base.session,
+      conversationHistory: base.conversationHistory,
+      recentTrades: base.recentTrades,
+      learnedSkills: base.learnedSkills,
     };
   }
 }
 
 module.exports = AgentMemory;
-
