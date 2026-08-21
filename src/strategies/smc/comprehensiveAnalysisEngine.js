@@ -1,6 +1,6 @@
 const candleManager = require('../../market-data/candleManager');
 const { analyzeSMC } = require('./index');
-const { analyzeCandlesticks } = require('../candlesticks');
+const { scanCandlestickPatterns } = require('../candlesticks');
 const { calculateEMA, calculateRSI, calculateBollingerBands, calculateATR, calculateMACD } = require('../../indicators');
 const marketFeed = require('../../market-data/marketFeed');
 const config = require('../../config');
@@ -37,7 +37,7 @@ class ComprehensiveAnalysisEngine {
       if (!candles || candles.length < 15) continue;
 
       const smc = analyzeSMC(candles);
-      const candlePatterns = analyzeCandlesticks(candles);
+      const candlePatterns = scanCandlestickPatterns(candles);
       const closes = candles.map(c => c.close);
       const ema20 = calculateEMA(closes, 20);
       const ema50 = calculateEMA(closes, 50);

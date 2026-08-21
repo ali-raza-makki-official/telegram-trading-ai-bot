@@ -12,14 +12,9 @@ async function testComprehensiveAnalysis() {
   console.log('DXY Status:', `${data.macro.dxy.price} (${data.macro.dxy.bias})`);
   console.log('NASDAQ Status:', `${data.macro.nasdaq.price} (${data.macro.nasdaq.bias})`);
 
-  console.log('\n2. Two-Sided Limit Trading Zones:');
-  console.log('Upper SELL Limit Zone:');
-  console.log(`• Price: $${data.upperSellLimit.price} | SL: $${data.upperSellLimit.sl} | TP: $${data.upperSellLimit.tp}`);
-  console.log(`• Context: ${data.upperSellLimit.context}`);
-
-  console.log('\nLower BUY Limit Zone:');
-  console.log(`• Price: $${data.lowerBuyLimit.price} | SL: $${data.lowerBuyLimit.sl} | TP: $${data.lowerBuyLimit.tp}`);
-  console.log(`• Context: ${data.lowerBuyLimit.context}`);
+  console.log('\n2. Two-Sided Tiered Limit Trading Zones:');
+  console.log(`Tiered BUY Limits Count: ${data.tieredBuyLimits.length}`);
+  console.log(`Tiered SELL Limits Count: ${data.tieredSellLimits.length}`);
 
   console.log('\nNo-Trade Zone Range:');
   console.log(`• Range: $${data.noTradeZone.bottom.toFixed(2)} - $${data.noTradeZone.top.toFixed(2)}`);
@@ -31,7 +26,7 @@ async function testComprehensiveAnalysis() {
   const activeZones = smartTrigger.getActiveZones();
   console.log('Active Zones Registered in Memory/Disk:', activeZones.length);
 
-  if (data.upperSellLimit && data.lowerBuyLimit && activeZones.length > 0) {
+  if (data.tieredBuyLimits.length > 0 && data.tieredSellLimits.length > 0 && activeZones.length > 0) {
     console.log('\n🎉 ALL FULL MULTI-TIMEFRAME ANALYSIS & LIMIT ZONE TESTS PASSED!');
   } else {
     throw new Error('Comprehensive analysis test failed');

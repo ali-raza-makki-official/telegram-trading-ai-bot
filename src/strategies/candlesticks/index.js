@@ -332,6 +332,7 @@ function scanCandlestickPatterns(candles) {
 
 module.exports = {
   scanCandlestickPatterns,
+  analyzeCandlesticks: scanCandlestickPatterns,
   checkDoji,
   checkHammer,
   checkInvertedHammer,
