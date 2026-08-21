@@ -193,9 +193,9 @@ If prompted for password, send: \`/auth [your_admin_password]\`
       await ctx.reply(statusText, { parse_mode: 'Markdown' });
     });
 
-    // /analyze — Full 7-Timeframe Sequential Analysis + Macro (DXY/NASDAQ) + Limit Zones
+    // /analyze — Master 7-Timeframe Deep Scan + Candlesticks + Macro + Multi-Tiered Limit Zones
     this.bot.command('analyze', async (ctx) => {
-      await ctx.reply('🔍 *Running Comprehensive 7-Timeframe Deep Scan (1W ➔ 1D ➔ 4H ➔ 1H ➔ 30M ➔ 15M ➔ 5M) & Macro Synthesis...*', { parse_mode: 'Markdown' });
+      await ctx.reply('⏳ *[Step 1/2] Initiating Master 7-Timeframe Deep Scan (1W ➔ 1D ➔ 4H ➔ 1H ➔ 30M ➔ 15M ➔ 5M), Candlestick Pattern Filtering & Macro Synthesis...*', { parse_mode: 'Markdown' });
       try {
         const ComprehensiveEngine = require('../strategies/smc/comprehensiveAnalysisEngine');
         const fullData = await ComprehensiveEngine.runFullAnalysis(config.system.primarySymbol);
@@ -210,11 +210,30 @@ If prompted for password, send: \`/auth [your_admin_password]\`
 
         const report = ComprehensiveEngine.formatTelegramReport(fullData);
 
-        // 2. Interactive 1-Tap Pending Limit Order Buttons
-        const kb = new InlineKeyboard()
-          .text(`📥 Set BUY LIMIT @ $${fullData.lowerBuyLimit.price.toFixed(1)}`, `LMT:B:0.01:${fullData.lowerBuyLimit.price}:${fullData.lowerBuyLimit.sl}:${fullData.lowerBuyLimit.tp}`).row()
-          .text(`📤 Set SELL LIMIT @ $${fullData.upperSellLimit.price.toFixed(1)}`, `LMT:S:0.01:${fullData.upperSellLimit.price}:${fullData.upperSellLimit.sl}:${fullData.upperSellLimit.tp}`).row()
-          .text('📍 View All Monitored Zones', 'ACTION:ZONES')
+        // 2. Interactive Multi-Tiered Limit Order Buttons
+        const kb = new InlineKeyboard();
+
+        // Row 1: Primary Tier-1 Limits
+        const b1 = fullData.tieredBuyLimits[0];
+        const s1 = fullData.tieredSellLimits[0];
+        if (b1) kb.text(`📥 BUY Limit 1 @ $${b1.price.toFixed(1)}`, `LMT:B:0.01:${b1.price}:${b1.sl}:${b1.tp}`);
+        if (s1) kb.text(`📤 SELL Limit 1 @ $${s1.price.toFixed(1)}`, `LMT:S:0.01:${s1.price}:${s1.sl}:${s1.tp}`).row();
+
+        // Row 2: Secondary Tier-2 Limits
+        const b2 = fullData.tieredBuyLimits[1];
+        const s2 = fullData.tieredSellLimits[1];
+        if (b2) kb.text(`📥 BUY Limit 2 @ $${b2.price.toFixed(1)}`, `LMT:B:0.01:${b2.price}:${b2.sl}:${b2.tp}`);
+        if (s2) kb.text(`📤 SELL Limit 2 @ $${s2.price.toFixed(1)}`, `LMT:S:0.01:${s2.price}:${s2.sl}:${s2.tp}`).row();
+
+        // Row 3: Tertiary Limit or Navigation
+        const b3 = fullData.tieredBuyLimits[2];
+        const s3 = fullData.tieredSellLimits[2];
+        if (b3 && s3) {
+          kb.text(`📥 BUY Lmt 3 @ $${b3.price.toFixed(1)}`, `LMT:B:0.01:${b3.price}:${b3.sl}:${b3.tp}`)
+            .text(`📤 SELL Lmt 3 @ $${s3.price.toFixed(1)}`, `LMT:S:0.01:${s3.price}:${s3.sl}:${s3.tp}`).row();
+        }
+
+        kb.text('📍 View All Monitored Zones', 'ACTION:ZONES')
           .text('💼 Account Status', 'ACTION:STATUS');
 
         try {
@@ -224,7 +243,7 @@ If prompted for password, send: \`/auth [your_admin_password]\`
         }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed /analyze command');
-        await ctx.reply(`❌ Comprehensive analysis failed: ${err.message}`);
+        await ctx.reply(`❌ Master analysis failed: ${err.message}`);
       }
     });
 
