@@ -2,6 +2,9 @@ const candleManager = require('../../market-data/candleManager');
 const { analyzeSMC } = require('./index');
 const { scanCandlestickPatterns } = require('../candlesticks');
 const { calculateEMA, calculateRSI, calculateBollingerBands, calculateATR, calculateMACD } = require('../../indicators');
+const { detectDivergences } = require('../indicators/divergenceDetector');
+const SilverBulletEngine = require('../ict/silverBullet');
+const VolumeProfileEngine = require('../indicators/volumeProfile');
 const marketFeed = require('../../market-data/marketFeed');
 const config = require('../../config');
 const logger = require('../../utils/logger');
@@ -10,7 +13,8 @@ const smartPriceTrigger = require('../../orchestrator/smartPriceTriggerEngine');
 
 /**
  * Institutional Master Multi-Timeframe (1W -> 1D -> 4H -> 1H -> 30m -> 15m -> 5m)
- * Multi-Tiered Limit Zones, Candlestick Pattern Engine & Macro Correlation Synthesizer
+ * Multi-Tiered Limit Zones, Candlestick Pattern Engine, Divergence Scanner,
+ * Silver Bullet Confluence & Tick-Volume Profile Synthesizer
  */
 class ComprehensiveAnalysisEngine {
   static async runFullAnalysis(symbol = config.system.primarySymbol || 'XAUUSD') {
@@ -20,6 +24,17 @@ class ComprehensiveAnalysisEngine {
 
     const allBuyLimits = [];
     const allSellLimits = [];
+    const discoveredDivergences = [];
+
+    // Check ICT Silver Bullet Window
+    const silverBullet = SilverBulletEngine.getSilverBulletStatus();
+
+    // Calculate Tick Volume Profile on 1H/15m Candles
+    let volumeProfile = null;
+    const h1Candles = candleManager.getCandles(symbol, '1h') || generateRealisticGoldCandles({ count: 50, timeframe: '1h', basePrice: currentPrice });
+    if (h1Candles && h1Candles.length >= 10) {
+      volumeProfile = VolumeProfileEngine.calculateProfile(h1Candles, 1.0);
+    }
 
     for (const tf of timeframes) {
       let candles = candleManager.getCandles(symbol, tf);
@@ -38,6 +53,14 @@ class ComprehensiveAnalysisEngine {
 
       const smc = analyzeSMC(candles);
       const candlePatterns = scanCandlestickPatterns(candles);
+      const divResult = detectDivergences(candles);
+
+      if (divResult.hasDivergence) {
+        for (const d of divResult.divergences) {
+          discoveredDivergences.push({ timeframe: tf, ...d });
+        }
+      }
+
       const closes = candles.map(c => c.close);
       const ema20 = calculateEMA(closes, 20);
       const ema50 = calculateEMA(closes, 50);
@@ -53,6 +76,7 @@ class ComprehensiveAnalysisEngine {
         lastClose: closes[closes.length - 1],
         patterns: candlePatterns?.patterns || [],
         primaryPattern: candlePatterns?.primaryPattern || 'Normal Consolidation',
+        divergences: divResult.divergences,
         ema20: ema20 ? ema20[ema20.length - 1] : null,
         ema50: ema50 ? ema50[ema50.length - 1] : null,
         ema200: ema200 ? ema200[ema200.length - 1] : null,
@@ -222,6 +246,9 @@ class ComprehensiveAnalysisEngine {
       symbol,
       currentPrice,
       macro: { dxy, nasdaq, us10y },
+      silverBullet,
+      volumeProfile,
+      divergences: discoveredDivergences,
       tfReports,
       noTradeZone: {
         bottom: Number((nearestBuy.price + 3.5).toFixed(2)),
@@ -238,6 +265,8 @@ class ComprehensiveAnalysisEngine {
         symbol,
         buyLimitsCount: uniqueBuyLimits.length,
         sellLimitsCount: uniqueSellLimits.length,
+        isSilverBullet: silverBullet.isSilverBulletActive,
+        divergencesCount: discoveredDivergences.length,
       },
       'Master Comprehensive Multi-Timeframe Analysis completed'
     );
@@ -255,7 +284,28 @@ class ComprehensiveAnalysisEngine {
     text += `• *NASDAQ (US100):* \`${data.macro.nasdaq.price || 18450}\` (${data.macro.nasdaq.bias || 'BULLISH'} ➔ Risk-On Sentiment)\n`;
     text += `• *US 10-Year Yields:* \`${data.macro.us10y.yield || 4.18}%\` (${data.macro.us10y.bias || 'BEARISH'} ➔ Yield Pressure Low)\n\n`;
 
-    // 2. Sequential 7-Timeframe Matrix
+    // 2. ICT Silver Bullet Window & Volume Profile (Explicit Tick-Volume labeled)
+    if (data.silverBullet?.isSilverBulletActive) {
+      text += `⚡ *ICT Silver Bullet Active:* 🎯 *${data.silverBullet.activeWindow.name}* (${data.silverBullet.activeWindow.nyTime})\n`;
+      text += `• Confluence Boost: *+${data.silverBullet.confluenceBoost} pts* | Target: \`${data.silverBullet.activeWindow.targetPips} pips\`\n\n`;
+    }
+
+    if (data.volumeProfile) {
+      text += `📊 *[Tick-Volume Profile (1H)]:* (MT5 Broker Tick Volume)\n`;
+      text += `• Point of Control (POC): \`$${data.volumeProfile.poc}\` | Value Area: \`$${data.volumeProfile.val} - $${data.volumeProfile.vah}\`\n\n`;
+    }
+
+    // 3. Multi-Timeframe Divergences
+    if (data.divergences && data.divergences.length > 0) {
+      text += `🔍 *Multi-Timeframe Divergences Detected:*\n`;
+      for (const d of data.divergences.slice(0, 2)) {
+        const icon = d.bias === 'BUY' ? '🟢' : '🔴';
+        text += `• ${icon} *${d.timeframe.toUpperCase()} ${d.type}:* _${d.description}_\n`;
+      }
+      text += '\n';
+    }
+
+    // 4. Sequential 7-Timeframe Matrix
     text += `📊 *7-Timeframe Sequential Matrix & Candlestick Patterns:*\n`;
     const tfList = ['1w', '1d', '4h', '1h', '30m', '15m', '5m'];
     for (const tf of tfList) {
@@ -270,18 +320,18 @@ class ComprehensiveAnalysisEngine {
     }
     text += '\n';
 
-    // 3. Pro Technical Indicators Context (15m/1h)
+    // 5. Pro Technical Indicators Context (15m/1h)
     const ind15 = data.tfReports['15m'] || {};
     text += `📈 *Pro Technical Indicators Context (15M / 1H):*\n`;
     text += `• *EMA Ribbon (20/50/200):* \`$${ind15.ema20?.toFixed(1) || 'N/A'}\` / \`$${ind15.ema50?.toFixed(1) || 'N/A'}\` / \`$${ind15.ema200?.toFixed(1) || 'N/A'}\`\n`;
     text += `• *Bollinger Bands:* \`$${ind15.bbLower?.toFixed(1) || 'N/A'} - $${ind15.bbUpper?.toFixed(1) || 'N/A'}\` | ATR Volatility: \`$${ind15.atr?.toFixed(2) || '3.50'}\`\n\n`;
 
-    // 4. No Trade Zone Warning
+    // 6. No Trade Zone Warning
     text += `🚫 *No-Trade Zone (Chop Boundary):*\n`;
     text += `• Avoid Market Orders In: \`$${data.noTradeZone.bottom.toFixed(2)} - $${data.noTradeZone.top.toFixed(2)}\`\n`;
     text += `• _${data.noTradeZone.description}_\n\n`;
 
-    // 5. Tiered Upper SELL Limit Zones
+    // 7. Tiered Upper SELL Limit Zones
     text += `🔴 *Tiered SELL LIMIT Zones (Supply / Resistance Levels):*\n`;
     for (let i = 0; i < data.tieredSellLimits.length; i++) {
       const s = data.tieredSellLimits[i];
@@ -291,7 +341,7 @@ class ComprehensiveAnalysisEngine {
       text += `   • Logic: _${s.confluenceNotes}_\n\n`;
     }
 
-    // 6. Tiered Lower BUY Limit Zones
+    // 8. Tiered Lower BUY Limit Zones
     text += `🟢 *Tiered BUY LIMIT Zones (Demand / Support Levels):*\n`;
     for (let i = 0; i < data.tieredBuyLimits.length; i++) {
       const b = data.tieredBuyLimits[i];

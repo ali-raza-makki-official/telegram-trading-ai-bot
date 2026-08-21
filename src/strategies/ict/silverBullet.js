@@ -1,61 +1,63 @@
-const { getCurrentSessionInfo } = require('./killzones');
-
 /**
- * ICT Silver Bullet Model
- * Occurs during specific 60-minute windows:
- * - London: 03:00 - 04:00 UTC
- * - NY AM: 10:00 - 11:00 AM EST (14:00 - 15:00 UTC)
- * - NY PM: 02:00 - 03:00 PM EST (18:00 - 19:00 UTC)
- * Pattern requires: Liquidity sweep -> Market structure shift (MSS) -> Entry on Fair Value Gap (FVG).
+ * ICT Silver Bullet Time-Window & Algorithmic Delivery Engine
+ *
+ * Silver Bullet 60-Minute Windows (in NY Time / UTC):
+ * 1. London Silver Bullet: 03:00 - 04:00 AM NY (07:00 - 08:00 UTC)
+ * 2. NY AM Silver Bullet:  10:00 - 11:00 AM NY (14:00 - 15:00 UTC)
+ * 3. NY PM Silver Bullet:  02:00 - 03:00 PM NY (18:00 - 19:00 UTC)
  */
-function detectSilverBullet(candles, fvgData, structureData, sessionInfo) {
-  if (!candles || candles.length < 10) return null;
 
-  const currentSession = sessionInfo || getCurrentSessionInfo();
-  const silverBulletWindow = currentSession.activeWindows.find(w => w.key.includes('SILVER_BULLET'));
+class SilverBulletEngine {
+  static getSilverBulletStatus(customDate = null) {
+    const now = customDate || new Date();
+    const utcHour = now.getUTCHours();
+    const utcMinute = now.getUTCMinutes();
+    const currentUtcTime = `${String(utcHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}`;
 
-  if (!silverBulletWindow) return null;
+    let activeWindow = null;
+    let confluenceBoost = 0;
 
-  const currentPrice = candles[candles.length - 1].close;
-
-  // Check if we have an active FVG in the direction of the recent MSS/CHoCH
-  if (structureData && structureData.recentCHoCH) {
-    if (structureData.recentCHoCH.type === 'CHOCH_BULLISH' && fvgData && fvgData.nearestBullishFVG) {
-      const fvg = fvgData.nearestBullishFVG;
-      if (currentPrice >= fvg.bottom && currentPrice <= fvg.top * 1.002) {
-        return {
-          type: 'BULLISH_SILVER_BULLET',
-          windowName: silverBulletWindow.name,
-          bias: 'BULLISH',
-          fvgZone: { top: fvg.top, bottom: fvg.bottom },
-          confidence: 85,
-          suggestedSl: structureData.lastSwingLow ? structureData.lastSwingLow.price : fvg.bottom - 2.0,
-          suggestedTp: (structureData.lastSwingHigh ? structureData.lastSwingHigh.price : currentPrice + 10.0),
-          description: `Silver Bullet setup active in ${silverBulletWindow.name}: Bullish MSS + FVG test at ${fvg.bottom.toFixed(2)} - ${fvg.top.toFixed(2)}`,
-        };
-      }
+    // London Silver Bullet: 07:00 - 08:00 UTC
+    if (utcHour === 7) {
+      activeWindow = {
+        name: 'London Silver Bullet',
+        nyTime: '03:00 - 04:00 AM NY',
+        utcTime: '07:00 - 08:00 UTC',
+        targetPips: 20,
+        description: 'London institutional expansion window. High probability FVG sweeps.',
+      };
+      confluenceBoost = 15.0;
+    }
+    // NY AM Silver Bullet: 14:00 - 15:00 UTC
+    else if (utcHour === 14) {
+      activeWindow = {
+        name: 'NY AM Silver Bullet',
+        nyTime: '10:00 - 11:00 AM NY',
+        utcTime: '14:00 - 15:00 UTC',
+        targetPips: 25,
+        description: 'New York prime institutional delivery window. Highest liquidity algorithmic runs.',
+      };
+      confluenceBoost = 20.0;
+    }
+    // NY PM Silver Bullet: 18:00 - 19:00 UTC
+    else if (utcHour === 18) {
+      activeWindow = {
+        name: 'NY PM Silver Bullet',
+        nyTime: '02:00 - 03:00 PM NY',
+        utcTime: '18:00 - 19:00 UTC',
+        targetPips: 15,
+        description: 'Late New York session liquidity sweep & algorithmic rebalancing window.',
+      };
+      confluenceBoost = 15.0;
     }
 
-    if (structureData.recentCHoCH.type === 'CHOCH_BEARISH' && fvgData && fvgData.nearestBearishFVG) {
-      const fvg = fvgData.nearestBearishFVG;
-      if (currentPrice <= fvg.top && currentPrice >= fvg.bottom * 0.998) {
-        return {
-          type: 'BEARISH_SILVER_BULLET',
-          windowName: silverBulletWindow.name,
-          bias: 'BEARISH',
-          fvgZone: { top: fvg.top, bottom: fvg.bottom },
-          confidence: 85,
-          suggestedSl: structureData.lastSwingHigh ? structureData.lastSwingHigh.price : fvg.top + 2.0,
-          suggestedTp: (structureData.lastSwingLow ? structureData.lastSwingLow.price : currentPrice - 10.0),
-          description: `Silver Bullet setup active in ${silverBulletWindow.name}: Bearish MSS + FVG test at ${fvg.bottom.toFixed(2)} - ${fvg.top.toFixed(2)}`,
-        };
-      }
-    }
+    return {
+      isSilverBulletActive: Boolean(activeWindow),
+      activeWindow,
+      confluenceBoost,
+      currentUtcTime,
+    };
   }
-
-  return null;
 }
 
-module.exports = {
-  detectSilverBullet,
-};
+module.exports = SilverBulletEngine;
