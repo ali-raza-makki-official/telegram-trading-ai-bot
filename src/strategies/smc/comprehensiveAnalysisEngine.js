@@ -312,9 +312,12 @@ class ComprehensiveAnalysisEngine {
       const r = data.tfReports[tf];
       if (r) {
         const icon = r.trend === 'BULLISH' ? '🟢' : r.trend === 'BEARISH' ? '🔴' : '⚪';
-        const patternName = Array.isArray(r.patterns) && r.patterns.length > 0
-          ? r.patterns.map(p => p.name || p.type).slice(0, 2).join(', ')
-          : (r.primaryPattern || 'Consolidation');
+        const validPatterns = Array.isArray(r.patterns)
+          ? r.patterns.map(p => (p && (p.pattern || p.name || p.type))).filter(Boolean)
+          : [];
+        const patternName = validPatterns.length > 0
+          ? validPatterns.slice(0, 2).map(n => String(n).replace(/_/g, ' ')).join(', ')
+          : (r.primaryPattern?.pattern ? r.primaryPattern.pattern.replace(/_/g, ' ') : (typeof r.primaryPattern === 'string' && r.primaryPattern ? r.primaryPattern : 'Normal Consolidation'));
         text += `• *${tf.toUpperCase()}:* ${icon} \`${r.trend}\` | RSI: \`${r.rsi?.toFixed(1) || '50.0'}\` | Pattern: _${patternName}_\n`;
       }
     }
