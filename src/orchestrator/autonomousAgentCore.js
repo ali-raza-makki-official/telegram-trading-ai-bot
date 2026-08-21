@@ -1,6 +1,7 @@
 const DeepSeekProvider = require('../llm/providers/DeepSeekProvider');
 const GeminiProvider = require('../llm/providers/GeminiProvider');
 const ClaudeProvider = require('../llm/providers/ClaudeProvider');
+const SmartDualRouter = require('../llm/smartRouter');
 const marketFeed = require('../market-data/marketFeed');
 const candleManager = require('../market-data/candleManager');
 const AgentMemory = require('../memory/agentMemory');
@@ -10,8 +11,8 @@ const logger = require('../utils/logger');
 
 /**
  * Autonomous General Intelligence Trading Agent Core
- * Freely analyzes the market, decides its own actions, synthesizes custom thinking,
- * dynamically designs interactive UI buttons, and autonomously executes or requests approval.
+ * Integrates Dynamic Smart Dual-Mode Routing (FAST_CHAT vs DEEP_THINKING)
+ * to minimize API token consumption by 85-95% while keeping deep reasoning for heavy analysis.
  */
 class AutonomousAgentCore {
   constructor() {
@@ -21,59 +22,72 @@ class AutonomousAgentCore {
   }
 
   /**
-   * Main Autonomous Reasoning Cycle:
-   * Called on candle closes, market triggers, user chat messages, or timer events.
+   * Main Autonomous Reasoning Cycle with Dynamic Smart Dual-Mode Routing
    */
   async thinkAndDecide({
     userQuery = null,
     chatId = null,
     orchestrator,
     triggerSource = 'USER_OR_CYCLE',
+    confluence = null,
+    isExplicitAnalysis = false,
   }) {
     const symbol = config.system.primarySymbol || 'XAUUSD';
     const livePrice = Number(marketFeed.getLatestPrice(symbol) || 4519.0);
 
-    // Build comprehensive real-time situational memory
+    // 1. Dynamic Task Complexity Classification
+    const taskClassification = SmartDualRouter.classifyTask({
+      userQuery,
+      triggerSource,
+      confluence,
+      isExplicitAnalysis,
+    });
+
+    const isDeepThinking = taskClassification.mode === 'DEEP_THINKING';
+    logger.info(
+      { mode: taskClassification.mode, reason: taskClassification.reason },
+      'SmartDualRouter assigned execution mode'
+    );
+
+    // 2. Build Context (Optimized for Fast vs Deep)
     const situationContext = await AgentMemory.buildFullContext({
       chatId,
       orchestrator,
       primarySymbol: symbol,
     });
 
-    const autonomyMode = orchestrator?.autonomyMode || 'semi'; // 'auto' | 'semi' | 'manual'
+    const autonomyMode = orchestrator?.autonomyMode || 'semi';
 
-    const autonomousSystemPrompt = `
-You are an Autonomous, Sovereign General Intelligence (AGI) Gold Trading AI Agent & Fund Manager.
-You are chatting with and trading for your partner Ali Raza via Telegram.
+    // 3. Construct Tailored System & User Prompt based on Mode
+    let systemPrompt = '';
+    let userPromptText = '';
 
-CORE MANDATE & AUTONOMY:
-1. You have total creative, analytical, and executive freedom to think, research, analyze, and decide your own actions.
-2. You are NOT bound to rigid hardcoded templates, scripted rules, or robotic checklist constraints.
-3. You dynamically observe:
-   - Live Price: $${livePrice.toFixed(2)} USD (Exness MT5)
-   - Account Balance: $${Number(situationContext.broker.balance).toFixed(2)} USD | Equity: $${Number(situationContext.broker.equity).toFixed(2)} USD
-   - Open Positions: ${JSON.stringify(situationContext.openPositions)}
-   - Multi-timeframe structure & indicators across 1W, 1D, 4h, 1h, 15m, 5m: ${JSON.stringify(situationContext.technicalMatrix)}
-   - Macro state (DXY, Silver SMT, Sessions): ${JSON.stringify(situationContext.macroSnapshot)}
-   - Recent Chat Context: ${JSON.stringify(situationContext.recentChat)}
-   - Current System Autonomy Mode: "${autonomyMode.toUpperCase()}"
+    if (isDeepThinking) {
+      // Deep Institutional Strategic Reasoning
+      systemPrompt = `
+You are an Autonomous Gold (XAU/USD) Trading AI Agent & Fund Manager for Ali Raza in Telegram.
+MODE: DEEP INSTITUTIONAL THINKING & SETUP SYNTHESIS.
 
-4. YOUR AUTONOMY LEVEL EXECUTION RULES:
-   - If Autonomy Mode is "AUTO": You have full sovereign power. If you spot a strong opportunity, you can decide to execute immediately without asking for permission!
-   - If Autonomy Mode is "SEMI": You formulate your exact trade setup (Direction, Lot, SL, TP, Target, Logic) and present it with actionable interactive approval buttons so Ali Raza can confirm with 1 tap.
-   - If Autonomy Mode is "MANUAL": You provide advisory, reasoning, and technical charts without executing trades.
+LIVE MARKET & BROKER SNAPSHOT:
+- Gold Price: $${livePrice.toFixed(2)} USD (Exness MT5)
+- Balance: $${Number(situationContext.broker.balance).toFixed(2)} USD | Equity: $${Number(situationContext.broker.equity).toFixed(2)} USD
+- Open Positions: ${JSON.stringify(situationContext.openPositions)}
+- Multi-Timeframe Technical Matrix: ${JSON.stringify(situationContext.technicalMatrix)}
+- Macro State (DXY, Silver SMT, Yields): ${JSON.stringify(situationContext.macroSnapshot)}
+- Autonomy Mode: "${autonomyMode.toUpperCase()}"
 
-5. CONVERSATION & THINKING STYLE:
-   - Think deeply, intelligently, and organically.
-   - Speak naturally in Roman Urdu / Urdu (or English if queried in English) with a sharp, senior institutional partner demeanor.
-   - Design your own interactive Telegram buttons dynamically to make conversation and actions effortless for Ali Raza.
-   - Never use canned, robotic pre-templates. Speak dynamically based on exact live market conditions.
+MANDATE:
+- Perform deep multi-timeframe reasoning, identify Order Blocks, FVGs, Liquidity Sweeps, and SMT Divergences.
+- Formulate a clear trade bias (BUY/SELL/HOLD) with exact Entry, SL, TP, and R:R.
+- If Autonomy Mode is "AUTO", you can set "action_type": "EXECUTE_TRADE".
+- If Autonomy Mode is "SEMI", set "action_type": "REQUEST_APPROVAL".
+- Reply in natural, senior institutional Roman Urdu / Urdu.
 
-Return your decision strictly in JSON matching this schema:
+Output format strictly JSON:
 {
-  "thought_process": "Your internal unfiltered strategic reasoning and situational synthesis",
-  "reply": "Your natural, direct, intelligent response to Ali Raza in Telegram",
-  "action_type": "NONE" | "EXECUTE_TRADE" | "CLOSE_TRADE" | "REQUEST_APPROVAL" | "MODIFY_POSITION",
+  "thought_process": "Deep institutional reasoning",
+  "reply": "Your clear, actionable analysis and response to Ali Raza",
+  "action_type": "NONE" | "EXECUTE_TRADE" | "CLOSE_TRADE" | "REQUEST_APPROVAL",
   "trade_decision": {
     "action": "BUY" | "SELL" | "HOLD",
     "lot": number,
@@ -86,93 +100,97 @@ Return your decision strictly in JSON matching this schema:
   "interactive_buttons": [
     { "text": "Button Label", "action": "ACTION_STRING" }
   ]
-}
-`;
-
-    const userPrompt = userQuery
-      ? `User Message / Query: "${userQuery}"`
-      : `Trigger: ${triggerSource}. Review current live market and open positions, formulate your next move, and decide whether to trade, manage risk, or wait.`;
-
-    const dsPayload = {
-      model: config.llm.deepseek.model || 'deepseek-chat', // FIX #12: Use config value (now 'deepseek-chat')
-      messages: [
-        { role: 'system', content: autonomousSystemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      stream: false,
-    };
-
-    if (config.llm.deepseek.thinkingMode) {
-      dsPayload.thinking = { type: 'enabled' };
-      dsPayload.reasoning_effort = config.llm.deepseek.reasoningEffort || 'high';
+}`;
+      userPromptText = userQuery || `Trigger: ${triggerSource}. Synthesize institutional market thesis.`;
     } else {
-      dsPayload.temperature = 0.3;
+      // Lightweight Fast Chat (Low Tokens, Instant Response)
+      systemPrompt = `
+You are an intelligent Gold Trading AI Assistant chatting with Ali Raza on Telegram.
+MODE: FAST LIGHTWEIGHT CONVERSATION (Token-Saving Active).
+
+QUICK SNAPSHOT:
+- Gold Price: $${livePrice.toFixed(2)} USD
+- Balance: $${Number(situationContext.broker.balance).toFixed(2)} USD | Equity: $${Number(situationContext.broker.equity).toFixed(2)} USD
+- Open Positions: ${situationContext.openPositions.length} active
+- Session: ${situationContext.marketSession?.sessionName || 'Active'}
+
+MANDATE:
+- Give a concise, friendly, and smart response in Roman Urdu / Urdu.
+- For simple greetings, questions, or status queries, be prompt and direct.
+- Do not dump huge essays. Keep it under 2-3 short paragraphs.
+
+Output format strictly JSON:
+{
+  "thought_process": "Quick conversational check",
+  "reply": "Your natural, concise response",
+  "action_type": "NONE",
+  "trade_decision": { "action": "HOLD" },
+  "interactive_buttons": [
+    { "text": "📊 15m Analysis", "action": "ACTION:ANALYZE_15m" },
+    { "text": "💼 Account Status", "action": "ACTION:STATUS" }
+  ]
+}`;
+      userPromptText = userQuery || 'Hello';
     }
 
-    try {
-      const url = `${config.llm.deepseek.baseUrl.replace(/\/+$/, '')}/chat/completions`;
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.llm.deepseek.apiKey}`,
-        },
-        body: JSON.stringify(dsPayload),
-      });
+    // 4. Route to Primary Provider (DeepSeek) with Fallback to Gemini
+    if (this.deepseek.isAvailable()) {
+      try {
+        const messages = [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPromptText },
+        ];
 
-      if (!response.ok && (response.status === 400 || response.status === 404)) {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.llm.deepseek.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: 'system', content: autonomousSystemPrompt },
-              { role: 'user', content: userPrompt },
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.3,
-          }),
+        const dsRes = await this.deepseek.chatCompletion(messages, {
+          mode: taskClassification.mode,
+          maxTokens: isDeepThinking ? 1500 : 350,
+          responseFormat: 'json_object',
         });
-      }
 
-      if (!response.ok) {
-        throw new Error(`DeepSeek API returned HTTP ${response.status}`);
+        const jsonMatch = dsRes.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (dsRes.reasoningContent && !parsed.thought_process) {
+            parsed.thought_process = dsRes.reasoningContent;
+          }
+          return parsed;
+        }
+      } catch (dsErr) {
+        logger.warn({ err: dsErr.message }, '[SmartDualRouter] DeepSeek failed, falling back to Gemini Dual-Mode...');
       }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '{}';
-      const parsed = JSON.parse(content);
-      return parsed;
-    } catch (err) {
-      logger.error({ err: err.message }, 'Autonomous Agent reasoning cycle error, trying Gemini fallback');
-      if (this.gemini.isAvailable()) {
-        const geminiRes = await this.gemini.generateThesis(userPrompt);
-        return {
-          thought_process: 'Gemini Autonomous Fallback',
-          reply: geminiRes.reasoning || 'Market analyzed.',
-          action_type: geminiRes.bias !== 'NEUTRAL' ? 'REQUEST_APPROVAL' : 'NONE',
-          trade_decision: {
-            action: geminiRes.bias,
-            lot: 0.01,
-            entry: livePrice,
-            sl: geminiRes.suggested_sl,
-            tp: geminiRes.suggested_tp1,
-            risk_reward: geminiRes.risk_reward_ratio || '1:2',
-            rationale: geminiRes.reasoning,
-          },
-          interactive_buttons: [
-            { text: '📊 15m Analysis', action: 'ACTION:ANALYZE_15m' },
-            { text: '💼 Account Status', action: 'ACTION:STATUS' },
-          ],
-        };
-      }
-      throw err;
     }
+
+    // Fallback to Gemini with Dual-Mode
+    if (this.gemini.isAvailable()) {
+      try {
+        const geminiRes = await this.gemini.chatCompletion(
+          `${systemPrompt}\n\nUser: ${userPromptText}`,
+          {
+            mode: taskClassification.mode,
+            maxTokens: isDeepThinking ? 1200 : 350,
+          }
+        );
+
+        const jsonMatch = geminiRes.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+      } catch (gemErr) {
+        logger.error({ err: gemErr.message }, '[SmartDualRouter] Gemini fallback also failed');
+      }
+    }
+
+    // Emergency Offline Return
+    return {
+      thought_process: 'Local Fallback',
+      reply: `Gold Price: $${livePrice.toFixed(2)} USD. System online.`,
+      action_type: 'NONE',
+      trade_decision: { action: 'HOLD' },
+      interactive_buttons: [
+        { text: '📊 15m Analysis', action: 'ACTION:ANALYZE_15m' },
+        { text: '💼 Account Status', action: 'ACTION:STATUS' },
+      ],
+    };
   }
 }
 

@@ -112,9 +112,20 @@ class AgentOrchestrator {
   // Master Pipeline triggered on Candle Close
   async handleCandleClose(timeframe) {
     const symbol = this.primarySymbol;
-    const currentPrice = marketFeed.getLatestPrice(symbol);
     const sessionInfo = getCurrentSessionInfo();
 
+    // Zero-token Weekend & Market Close Guard
+    if (sessionInfo.isWeekend) {
+      logger.debug('Weekend detected (market closed). Skipping background AI candle processing.');
+      return;
+    }
+
+    if (this.isPaused) {
+      logger.debug('Trading agent paused. Skipping background AI candle processing.');
+      return;
+    }
+
+    const currentPrice = marketFeed.getLatestPrice(symbol);
     logger.info({ symbol, timeframe, currentPrice, session: sessionInfo.marketSession }, 'Processing candle close cycle');
 
     // 1. Reconcile past predictions against recent price action

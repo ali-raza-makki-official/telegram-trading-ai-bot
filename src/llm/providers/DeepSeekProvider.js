@@ -15,32 +15,38 @@ class DeepSeekProvider {
     return Boolean(this.apiKey);
   }
 
-  async generateThesis(promptText) {
+  /**
+   * Smart Dual-Mode Chat Completion
+   * @param {Array} messages - Chat messages array
+   * @param {Object} options - { mode: 'FAST_CHAT' | 'DEEP_THINKING', maxTokens: number, responseFormat: string }
+   */
+  async chatCompletion(messages, options = {}) {
     if (!this.isAvailable()) {
       throw new Error('DeepSeek API key not configured (DEEPSEEK_API_KEY)');
     }
 
+    const mode = options.mode || (this.thinkingMode ? 'DEEP_THINKING' : 'FAST_CHAT');
+    const isDeep = mode === 'DEEP_THINKING';
+    const url = `${this.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+
+    const requestBody = {
+      model: isDeep ? (this.model || 'deepseek-v4-pro') : 'deepseek-chat',
+      messages,
+      response_format: options.responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
+      temperature: isDeep ? 0.2 : 0.3,
+      stream: false,
+    };
+
+    if (isDeep) {
+      requestBody.thinking = { type: 'enabled' };
+      requestBody.reasoning_effort = this.reasoningEffort;
+      logger.info({ mode: 'DEEP_THINKING', model: requestBody.model }, '[DeepSeek SmartRouter] Executing Deep Institutional Reasoning');
+    } else {
+      requestBody.max_tokens = options.maxTokens || 400;
+      logger.info({ mode: 'FAST_CHAT', model: requestBody.model }, '[DeepSeek SmartRouter] Executing Fast Lightweight Response (Token-Saving Active)');
+    }
+
     try {
-      const url = `${this.baseUrl.replace(/\/+$/, '')}/chat/completions`;
-      logger.info({ model: this.model, thinkingMode: this.thinkingMode }, 'Sending analysis request to DeepSeek-V4-Pro API...');
-
-      const requestBody = {
-        model: this.model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: promptText },
-        ],
-        response_format: { type: 'json_object' },
-        stream: false,
-      };
-
-      if (this.thinkingMode) {
-        requestBody.thinking = { type: 'enabled' };
-        requestBody.reasoning_effort = this.reasoningEffort;
-      } else {
-        requestBody.temperature = 0.2;
-      }
-
       let response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -50,17 +56,15 @@ class DeepSeekProvider {
         body: JSON.stringify(requestBody),
       });
 
-      // Graceful fallback if model name or thinking parameter needs standard format
+      // Fallback if thinking or deepseek-v4-pro is unsupported by standard proxy
       if (!response.ok && (response.status === 400 || response.status === 404)) {
-        logger.warn({ status: response.status }, 'Retrying DeepSeek request with fallback payload...');
+        logger.warn({ status: response.status }, '[DeepSeek SmartRouter] Retrying with standard deepseek-chat fallback...');
         const fallbackBody = {
           model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: promptText },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.2,
+          messages,
+          response_format: options.responseFormat === 'json_object' ? { type: 'json_object' } : undefined,
+          temperature: 0.3,
+          max_tokens: options.maxTokens || 400,
         };
         response = await fetch(url, {
           method: 'POST',
@@ -82,21 +86,39 @@ class DeepSeekProvider {
       const content = message.content || '{}';
       const reasoningContent = message.reasoning_content || null;
 
-      // Parse JSON
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('DeepSeek response did not contain a valid JSON object');
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (reasoningContent) {
-        parsed.thinking_process = reasoningContent;
-      }
-      return TradeThesisSchema.parse(parsed);
+      return {
+        content,
+        reasoningContent,
+        mode,
+        usage: data.usage || null,
+      };
     } catch (err) {
-      logger.error({ err: err.message }, 'DeepSeek LLM reasoning error');
+      logger.error({ err: err.message, mode }, 'DeepSeek API execution failed');
       throw err;
     }
+  }
+
+  async generateThesis(promptText, options = {}) {
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: promptText },
+    ];
+
+    const result = await this.chatCompletion(messages, {
+      mode: options.mode || 'DEEP_THINKING',
+      responseFormat: 'json_object',
+    });
+
+    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('DeepSeek response did not contain a valid JSON object');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (result.reasoningContent) {
+      parsed.thinking_process = result.reasoningContent;
+    }
+    return TradeThesisSchema.parse(parsed);
   }
 }
 
