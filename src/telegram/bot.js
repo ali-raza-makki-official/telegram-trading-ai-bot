@@ -606,8 +606,9 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         try {
           const result = await this.orchestrator.executeManualTrade({
             symbol: config.system.primarySymbol,
-            type: type.replace('_LIMIT', ''),
+            type,
             lot,
+            openPrice: limitPrice,
             sl,
             tp,
           });

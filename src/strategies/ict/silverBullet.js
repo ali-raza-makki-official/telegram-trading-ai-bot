@@ -60,4 +60,33 @@ class SilverBulletEngine {
   }
 }
 
-module.exports = SilverBulletEngine;
+function detectSilverBullet(candles, fvgData = null, structureData = null, sessionInfo = null) {
+  const status = SilverBulletEngine.getSilverBulletStatus();
+  if (!status.isSilverBulletActive) return null;
+
+  let bias = 'NEUTRAL';
+  let description = `${status.activeWindow.name} Active (${status.activeWindow.nyTime})`;
+
+  if (fvgData?.bullishFVGs?.length > 0) {
+    bias = 'BULLISH';
+    description += ` - Bullish FVG setup detected in delivery window.`;
+  } else if (fvgData?.bearishFVGs?.length > 0) {
+    bias = 'BEARISH';
+    description += ` - Bearish FVG setup detected in delivery window.`;
+  }
+
+  return {
+    isTriggered: true,
+    bias,
+    windowName: status.activeWindow.name,
+    nyTime: status.activeWindow.nyTime,
+    confluenceBoost: status.confluenceBoost,
+    description,
+  };
+}
+
+module.exports = {
+  SilverBulletEngine,
+  detectSilverBullet,
+  getSilverBulletStatus: SilverBulletEngine.getSilverBulletStatus,
+};

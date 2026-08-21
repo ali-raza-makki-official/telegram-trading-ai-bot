@@ -267,14 +267,14 @@ class MetaApiClient extends EventEmitter {
     }
   }
 
-  // Execute Market Order via RPC Connection
-  async openOrder({ symbol = config.system.primarySymbol, type, lot, sl = null, tp = null }) {
+  // Execute Market or Pending Limit Order via RPC Connection
+  async openOrder({ symbol = config.system.primarySymbol, type, lot, openPrice = null, sl = null, tp = null }) {
     if (!this.isConnected || !this.rpcConnection) {
       throw new Error('MetaApi Cloud is not connected. Check METAAPI_API_TOKEN and METAAPI_ACCOUNT_ID.');
     }
 
     const targetSymbol = this.resolveSymbol(symbol);
-    logger.info({ symbol, targetSymbol, type, lot, sl, tp }, 'Executing live order via MetaApi Cloud RPC...');
+    logger.info({ symbol, targetSymbol, type, lot, openPrice, sl, tp }, 'Executing live order via MetaApi Cloud RPC...');
 
     const execClient = this.rpcConnection;
     let tradeResult;
@@ -282,8 +282,29 @@ class MetaApiClient extends EventEmitter {
     const stopLossValue = sl ? Number(Number(sl).toFixed(2)) : undefined;
     const takeProfitValue = tp ? Number(Number(tp).toFixed(2)) : undefined;
     const volumeValue = Number(Number(lot).toFixed(2));
+    const priceValue = openPrice ? Number(Number(openPrice).toFixed(2)) : undefined;
 
-    if (type === 'BUY') {
+    const upperType = (type || '').toUpperCase();
+
+    if (upperType === 'BUY_LIMIT') {
+      tradeResult = await execClient.createLimitBuyOrder(
+        targetSymbol,
+        volumeValue,
+        priceValue,
+        stopLossValue,
+        takeProfitValue,
+        { comment: 'AI Gold Limit' }
+      );
+    } else if (upperType === 'SELL_LIMIT') {
+      tradeResult = await execClient.createLimitSellOrder(
+        targetSymbol,
+        volumeValue,
+        priceValue,
+        stopLossValue,
+        takeProfitValue,
+        { comment: 'AI Gold Limit' }
+      );
+    } else if (upperType === 'BUY') {
       tradeResult = await execClient.createMarketBuyOrder(
         targetSymbol,
         volumeValue,

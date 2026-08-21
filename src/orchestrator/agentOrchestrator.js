@@ -344,15 +344,15 @@ class AgentOrchestrator {
   }
 
 
-  async executeManualTrade({ symbol, type, lot, sl, tp }) {
+  async executeManualTrade({ symbol, type, lot, openPrice = null, sl, tp }) {
     const currentPrice = marketFeed.getLatestPrice(symbol);
     const accountSummary = await this.getAccountSummary();
 
     const validation = await riskManager.validateTrade({
       symbol,
-      type,
+      type: type.replace('_LIMIT', ''),
       lot,
-      entryPrice: currentPrice,
+      entryPrice: openPrice || currentPrice,
       sl,
       tp,
       accountBalance: accountSummary.balance,
@@ -371,12 +371,12 @@ class AgentOrchestrator {
         lot,
         sl,
         tp,
-        currentPrice,
+        currentPrice: openPrice || currentPrice,
       });
     } else if (this.executionMode === 'metaapi') {
-      trade = await metaApiClient.openOrder({ symbol, type, lot, sl, tp });
+      trade = await metaApiClient.openOrder({ symbol, type, lot, openPrice, sl, tp });
     } else {
-      trade = await mt5Bridge.openOrder({ symbol, type, lot, sl, tp });
+      trade = await mt5Bridge.openOrder({ symbol, type, lot, openPrice, sl, tp });
     }
 
     return { success: true, trade };

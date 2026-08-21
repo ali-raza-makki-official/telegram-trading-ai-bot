@@ -1,5 +1,5 @@
 const { detectDivergences } = require('../src/strategies/indicators/divergenceDetector');
-const SilverBulletEngine = require('../src/strategies/ict/silverBullet');
+const { SilverBulletEngine } = require('../src/strategies/ict/silverBullet');
 const VolumeProfileEngine = require('../src/strategies/indicators/volumeProfile');
 
 function runAllTests() {
