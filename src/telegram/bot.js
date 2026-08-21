@@ -193,44 +193,38 @@ If prompted for password, send: \`/auth [your_admin_password]\`
       await ctx.reply(statusText, { parse_mode: 'Markdown' });
     });
 
-    // /analyze
+    // /analyze — Full 7-Timeframe Sequential Analysis + Macro (DXY/NASDAQ) + Limit Zones
     this.bot.command('analyze', async (ctx) => {
-      await ctx.reply('🔍 *Running multi-timeframe SMC/ICT technical analysis & AI synthesis...*', { parse_mode: 'Markdown' });
+      await ctx.reply('🔍 *Running Comprehensive 7-Timeframe Deep Scan (1W ➔ 1D ➔ 4H ➔ 1H ➔ 30M ➔ 15M ➔ 5M) & Macro Synthesis...*', { parse_mode: 'Markdown' });
       try {
-        const text = ctx.message.text.trim();
-        const parts = text.split(/\s+/);
-        const tf = parts[2] || '15m';
+        const ComprehensiveEngine = require('../strategies/smc/comprehensiveAnalysisEngine');
+        const fullData = await ComprehensiveEngine.runFullAnalysis(config.system.primarySymbol);
 
-        const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, tf);
-        
-        // 1. Send Visual TradingView-style SMC Chart Snapshot
-        await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, tf, thesis);
-
-        const report = `
-🤖 *AI Gold Analysis Report (${config.system.primarySymbol} - ${tf})*
-
-🧭 *Bias:* *${thesis.bias}* (Confidence: ${thesis.confidence}%)
-🎯 *Primary Setup:* ${thesis.primary_setup}
-
-📝 *Synthesis & Rationale:*
-${thesis.reasoning}
-
-📐 *Trade Geometry:*
-• Entry Zone: ${thesis.entry_zone ? `$${thesis.entry_zone.min} - $${thesis.entry_zone.max}` : 'Market Execution'}
-• Stop Loss: ${thesis.suggested_sl ? `$${thesis.suggested_sl}` : 'N/A'}
-• Take Profit 1: ${thesis.suggested_tp1 ? `$${thesis.suggested_tp1}` : 'N/A'}
-• Take Profit 2: ${thesis.suggested_tp2 ? `$${thesis.suggested_tp2}` : 'N/A'}
-• Risk/Reward Ratio: ${thesis.risk_reward_ratio ? `${thesis.risk_reward_ratio}R` : 'N/A'}
-• Invalidation: ${thesis.invalidation_level ? `$${thesis.invalidation_level}` : 'N/A'}
-`;
+        // 1. Send Visual TradingView-style SMC Chart Snapshot (15m Primary)
         try {
-          await ctx.reply(report, { parse_mode: 'Markdown' });
+          const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, '15m');
+          await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, '15m', thesis);
+        } catch (chartErr) {
+          logger.debug({ err: chartErr.message }, 'Chart photo skipped in full analysis');
+        }
+
+        const report = ComprehensiveEngine.formatTelegramReport(fullData);
+
+        // 2. Interactive 1-Tap Pending Limit Order Buttons
+        const kb = new InlineKeyboard()
+          .text(`📥 Set BUY LIMIT @ $${fullData.lowerBuyLimit.price.toFixed(1)}`, `LMT:B:0.01:${fullData.lowerBuyLimit.price}:${fullData.lowerBuyLimit.sl}:${fullData.lowerBuyLimit.tp}`).row()
+          .text(`📤 Set SELL LIMIT @ $${fullData.upperSellLimit.price.toFixed(1)}`, `LMT:S:0.01:${fullData.upperSellLimit.price}:${fullData.upperSellLimit.sl}:${fullData.upperSellLimit.tp}`).row()
+          .text('📍 View All Monitored Zones', 'ACTION:ZONES')
+          .text('💼 Account Status', 'ACTION:STATUS');
+
+        try {
+          await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
         } catch {
-          await ctx.reply(report.replace(/[*_`]/g, ''));
+          await ctx.reply(report.replace(/[*_`]/g, ''), { reply_markup: kb });
         }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed /analyze command');
-        await ctx.reply(`❌ Analysis failed: ${err.message}`);
+        await ctx.reply(`❌ Comprehensive analysis failed: ${err.message}`);
       }
     });
 
@@ -574,6 +568,55 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         } catch (err) {
           logger.error({ err: err.message }, 'Failed executing button trade');
           await ctx.reply(`❌ *Trade Execution Failed:* ${err.message}`, { parse_mode: 'Markdown' });
+        }
+        return;
+      }
+
+      // 1b. Dynamic 1-Tap Pending Limit Order Placement (BUY_LIMIT / SELL_LIMIT)
+      if (data.startsWith('LMT:')) {
+        const [, tCode, lotS, lPriceS, slS, tpS] = data.split(':');
+        const type = tCode === 'B' ? 'BUY_LIMIT' : 'SELL_LIMIT';
+        const lot = parseFloat(lotS) || 0.01;
+        const limitPrice = parseFloat(lPriceS);
+        const sl = parseFloat(slS) || null;
+        const tp = parseFloat(tpS) || null;
+
+        await ctx.answerCallbackQuery({ text: `Setting ${type} @ $${limitPrice}...` });
+        await ctx.reply(`⏳ *Placing ${type} Pending Order on Exness MT5...*\n• Limit Price: \`$${limitPrice.toFixed(2)}\`\n• Volume: \`${lot} Lot\`\n• SL: \`$${sl || 'N/A'}\` | TP: \`$${tp || 'N/A'}\``, { parse_mode: 'Markdown' });
+
+        try {
+          const result = await this.orchestrator.executeManualTrade({
+            symbol: config.system.primarySymbol,
+            type: type.replace('_LIMIT', ''),
+            lot,
+            sl,
+            tp,
+          });
+
+          // Auto-register pending zone in SmartPriceTriggerEngine
+          const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
+          smartTrigger.registerZone({
+            symbol: config.system.primarySymbol,
+            type: type,
+            timeframe: '15m',
+            bias: type.startsWith('BUY') ? 'BULLISH' : 'BEARISH',
+            minPrice: limitPrice - 0.75,
+            maxPrice: limitPrice + 0.75,
+            referencePrice: limitPrice,
+            description: `Pending ${type} active at $${limitPrice.toFixed(2)}`,
+          });
+
+          const kb = new InlineKeyboard()
+            .text('📍 Active Watch Zones', 'ACTION:ZONES')
+            .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+
+          await ctx.reply(
+            `✅ *Pending Limit Order Placed Successfully!*\n\n• Broker: \`Exness MT5\`\n• Order: *${type}* (${lot} Lot)\n• Target Entry: \`$${limitPrice.toFixed(2)}\`\n• Stop Loss: \`$${sl || 'None'}\`\n• Take Profit: \`$${tp || 'None'}\`\n\n_When market reaches $${limitPrice.toFixed(2)}, order will trigger and AI will self-evaluate the bounce!_`,
+            { parse_mode: 'Markdown', reply_markup: kb }
+          );
+        } catch (err) {
+          logger.error({ err: err.message }, 'Failed setting pending limit order');
+          await ctx.reply(`❌ Failed setting limit order: ${err.message}`);
         }
         return;
       }
