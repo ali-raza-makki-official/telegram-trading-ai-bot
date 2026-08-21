@@ -345,7 +345,8 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
           for (const p of recent.slice(0, 5)) {
             const icon = p.status === 'HIT_TP1' || p.status === 'HIT_TP2' ? '✅' : p.status === 'HIT_SL' ? '❌' : '⏳';
             const pips = p.outcome_pips !== null ? `${p.outcome_pips > 0 ? '+' : ''}${p.outcome_pips} pips` : 'In Progress';
-            msg += `• ${icon} *${p.bias}* (${p.timeframe || '15m'}) — ${p.primary_setup || 'Setup'}: \`${pips}\`\n`;
+            const cleanSetup = String(p.primary_setup || 'Setup').replace(/[*_`]/g, '');
+            msg += `• ${icon} *${p.bias}* (${p.timeframe || '15m'}) — ${cleanSetup}: \`${pips}\`\n`;
           }
           msg += `\n`;
         }
@@ -353,7 +354,8 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
         if (skills.recentLogs && skills.recentLogs.length > 0) {
           msg += `🧠 *Latest AI Retrospective Lessons:*\n`;
           for (const log of skills.recentLogs.slice(-2)) {
-            msg += `• _${log.lesson}_\n`;
+            const cleanLesson = String(log.lesson || '').replace(/[*_`]/g, '');
+            msg += `• ${cleanLesson}\n`;
           }
         }
 
@@ -361,7 +363,11 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
           .text('🏛️ Master Analysis', 'ACTION:ANALYZE_MASTER')
           .text('💼 Account Status', 'ACTION:STATUS');
 
-        await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        try {
+          await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch {
+          await ctx.reply(msg.replace(/[*_`]/g, ''), { reply_markup: kb });
+        }
       } catch (err) {
         logger.error({ err: err.message }, 'Failed generating unified performance report');
         await ctx.reply(`❌ Could not load performance: ${err.message}`);
