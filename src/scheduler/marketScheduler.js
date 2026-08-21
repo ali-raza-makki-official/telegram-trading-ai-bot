@@ -20,12 +20,6 @@ class MarketScheduler extends EventEmitter {
     });
     this.jobs.push(m15Job);
 
-    // 2. 5-Minute Candle Close Trigger
-    const m5Job = cron.schedule('*/5 * * * *', () => {
-      this.emit('candleClose', { timeframe: '5m', timestamp: Date.now() });
-    });
-    this.jobs.push(m5Job);
-
     // 3. 1-Hour Candle Close Trigger
     const h1Job = cron.schedule('0 * * * *', () => {
       this.emit('candleClose', { timeframe: '1h', timestamp: Date.now() });

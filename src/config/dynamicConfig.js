@@ -12,10 +12,10 @@ const DEFAULT_STRATEGY_CONFIG = [
   // 1. AI-Tunable Strategy Weights & Thresholds
   {
     param_key: 'confluence.min_threshold',
-    param_value: 70.0,
+    param_value: 50.0,
     param_type: 'threshold',
-    min_bound: 55.0,
-    max_bound: 85.0,
+    min_bound: 35.0,
+    max_bound: 80.0,
     is_ai_tunable: true,
     description: 'Minimum confluence confidence percentage required to trigger an actionable trade',
   },

@@ -38,8 +38,8 @@ const config = {
     deepseek: {
       apiKey: process.env.DEEPSEEK_API_KEY || '',
       model: process.env.DEEPSEEK_MODEL || 'deepseek-chat', // FIX #11: Valid model names: 'deepseek-chat' | 'deepseek-reasoner'
-      thinkingMode: process.env.DEEPSEEK_THINKING_MODE !== 'false', // true by default
-      reasoningEffort: process.env.DEEPSEEK_REASONING_EFFORT || 'high', // 'low' | 'high' | 'max'
+      thinkingMode: process.env.DEEPSEEK_THINKING_MODE === 'true', // false by default for maximum token savings
+      reasoningEffort: process.env.DEEPSEEK_REASONING_EFFORT || 'low', // 'low' by default
       baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     },
 
