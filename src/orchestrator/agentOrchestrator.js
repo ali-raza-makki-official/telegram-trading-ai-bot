@@ -85,6 +85,45 @@ class AgentOrchestrator {
       }
     });
 
+    // 6b. Connect Smart Price Zone & Liquidity Triggers (Zero-Token Local Check)
+    marketFeed.on('priceZoneTriggered', async ({ zones, currentPrice }) => {
+      if (this.isPaused) return;
+      for (const zone of zones) {
+        logger.info({ zoneId: zone.id, type: zone.type, price: currentPrice }, '🎯 [Orchestrator] Smart Price Zone Activated! Initiating Target Re-Analysis...');
+        
+        try {
+          const autonomousCore = require('./autonomousAgentCore');
+          const decision = await autonomousCore.thinkAndDecide({
+            userQuery: `Price has reached target ${zone.type} zone [${zone.minPrice} - ${zone.maxPrice}] at $${currentPrice.toFixed(2)}. ${zone.description}. Re-analyze structure and execute or request approval.`,
+            chatId: this.telegram?.adminChatId,
+            orchestrator: this,
+            triggerSource: 'PRICE_ZONE_ACTIVATION',
+            isExplicitAnalysis: true,
+          });
+
+          if (this.autonomyMode === 'auto' && decision.action_type === 'EXECUTE_TRADE' && decision.trade_decision) {
+            const td = decision.trade_decision;
+            await this.executeManualTrade({
+              symbol: this.primarySymbol,
+              type: td.action.toUpperCase(),
+              lot: td.lot || 0.01,
+              sl: td.sl || null,
+              tp: td.tp || null,
+            });
+            await this.telegram.broadcastAlert(
+              `⚡ *Auto-Executed on Price Zone Hit!*\n\n• Target Zone: \`${zone.type} [${zone.minPrice} - ${zone.maxPrice}]\`\n• Trigger Price: \`$${currentPrice.toFixed(2)}\`\n• Order: *${td.action.toUpperCase()}* (${td.lot || 0.01} Lot)\n• Rationale: _${td.rationale}_`
+            );
+          } else if (this.telegram?.adminChatId) {
+            await this.telegram.broadcastAlert(
+              `🎯 *Smart Price Level Hit (${zone.type})!*\n\n• Price: \`$${currentPrice.toFixed(2)} USD\`\n• Monitored Zone: \`$${zone.minPrice} - $${zone.maxPrice}\`\n• Setup: _${zone.description}_\n\n🤖 *AI Re-Analysis:* \n${decision.reply}`
+            );
+          }
+        } catch (zoneErr) {
+          logger.error({ err: zoneErr.message }, 'Failed processing price zone trigger re-analysis');
+        }
+      }
+    });
+
     marketScheduler.on('killzoneEnter', async (kz) => {
       logger.info({ kz: kz.name }, 'ICT Killzone Event');
       await this.telegram.broadcastAlert(`🔔 *ICT Killzone Active:* ${kz.name}`);
@@ -147,6 +186,19 @@ class AgentOrchestrator {
     });
 
     this.latestBias = confluence.bias;
+
+    // Auto-Register SMC/ICT Order Blocks, FVGs & Liquidity zones to Smart Price Trigger Engine
+    try {
+      const smartTrigger = require('./smartPriceTriggerEngine');
+      smartTrigger.registerFromAnalysis({
+        symbol,
+        smcData: confluence.smc,
+        ictData: confluence.ict,
+        currentPrice,
+      });
+    } catch (regErr) {
+      logger.debug({ err: regErr.message }, 'Failed registering price trigger zones');
+    }
 
     // 4. Check if confluence threshold is reached for LLM escalation
     if (!confluence.isActionable || confluence.confidence < config.strategy.minConfluenceScore) {

@@ -75,6 +75,7 @@ class TelegramBotService {
         { command: 'execute', description: '⚡ Execute: /execute [buy/sell] [lot] [sl] [tp]' },
         { command: 'close', description: '❌ Close: /close [ticket|all]' },
         { command: 'mode', description: '⚙️ Autonomy Mode: /mode [auto|semi|manual]' },
+        { command: 'zones', description: '📍 Smart Price Watch Zones & Triggers' },
         { command: 'config', description: '🔧 Strategy Weights & Dynamic Config' },
         { command: 'accuracy', description: '🎯 AI Prediction Win Rate & Accuracy' },
         { command: 'schedule', description: '🕒 Killzone Timers & Market Hours' },
@@ -342,6 +343,33 @@ ${thesis.reasoning}
 _Past predictions and outcomes are fed into the LLM context memory to continuously calibrate accuracy._
 `;
       await ctx.reply(msg, { parse_mode: 'Markdown' });
+    });
+
+    // /zones — Smart Price Watch Zones & Liquidity Triggers
+    this.bot.command('zones', async (ctx) => {
+      const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
+      const zones = smartTrigger.getActiveZones();
+      const currentPrice = require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4519.0;
+
+      if (zones.length === 0) {
+        return ctx.reply(
+          `📍 *Smart Price Watch Zones*\n\n• Current Gold Price: \`$${Number(currentPrice).toFixed(2)}\`\n• Active Watch Zones: *0*\n\n_Run /analyze to scan and auto-register new Order Blocks, FVGs and Liquidity pools._`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      let text = `📍 *Smart Price Action Watch Zones (${zones.length} Active)*\n`;
+      text += `• Current Gold Price: \`$${Number(currentPrice).toFixed(2)} USD\`\n\n`;
+
+      for (const z of zones.slice(0, 6)) {
+        const dist = Math.abs(currentPrice - ((z.minPrice + z.maxPrice) / 2)).toFixed(1);
+        text += `🎯 *${z.type}* (${z.timeframe} | ${z.bias})\n`;
+        text += `• Range: \`$${z.minPrice.toFixed(2)} - $${z.maxPrice.toFixed(2)}\` (Distance: $${dist})\n`;
+        text += `• Context: _${z.description}_\n\n`;
+      }
+
+      text += '_When price hits any of these zones, the AI triggers an instant re-analysis without wasting tokens!_';
+      await ctx.reply(text, { parse_mode: 'Markdown' });
     });
 
     // /config — Dynamic Strategy Config & Adaptive Parameter Store (Section 7)

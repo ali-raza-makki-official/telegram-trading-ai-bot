@@ -73,17 +73,33 @@ class MarketFeed extends EventEmitter {
       // Small tick delta
       const tickDelta = (Math.random() - 0.49) * 0.4;
       const newPrice = Number((prevClose + tickDelta).toFixed(2));
-      this.latestPrices.set(symbol, newPrice);
-      this.latestPrices.set('XAUUSD', newPrice);
-      this.latestPrices.set('XAUUSDm', newPrice);
-
-      // Emit tick
-      this.emit('tick', {
-        symbol,
-        price: newPrice,
-        timestamp: Date.now(),
-      });
+      this.updatePrice(symbol, newPrice);
     }, 3000);
+  }
+
+  updatePrice(symbol, price) {
+    const p = Number(price);
+    this.latestPrices.set(symbol, p);
+    this.latestPrices.set('XAUUSD', p);
+    this.latestPrices.set('XAUUSDm', p);
+
+    // Smart Price Action Zone & Liquidity Check (0ms local evaluation, 0 tokens)
+    try {
+      const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
+      const triggeredZones = smartTrigger.evaluatePriceTick({ symbol: 'XAUUSD', currentPrice: p });
+      if (triggeredZones.length > 0) {
+        this.emit('priceZoneTriggered', { zones: triggeredZones, currentPrice: p });
+      }
+    } catch (err) {
+      logger.error({ err: err.message }, 'Error checking smart price trigger zones');
+    }
+
+    // Emit tick
+    this.emit('tick', {
+      symbol,
+      price: p,
+      timestamp: Date.now(),
+    });
   }
 
   // FIX #16: Refresh correlated data periodically to simulate market movement
