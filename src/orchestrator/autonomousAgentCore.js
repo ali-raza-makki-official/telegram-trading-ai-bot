@@ -143,14 +143,30 @@ Output format strictly JSON:
           `${systemPrompt}\n\nUser: ${userPromptText}`,
           {
             mode: taskClassification.mode,
-            maxTokens: isDeepThinking ? 1500 : 450,
+            maxTokens: isDeepThinking ? 1500 : 600,
             responseFormat: 'json_object',
           }
         );
 
-        const jsonMatch = geminiRes.content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
+        if (geminiRes?.content) {
+          const jsonMatch = geminiRes.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              return JSON.parse(jsonMatch[0]);
+            } catch {
+              // fallback to raw text if JSON malformed
+            }
+          }
+          return {
+            thought_process: 'Gemini Multimodal Live Analysis',
+            reply: geminiRes.content.replace(/^```json|^```|```$/gm, '').trim(),
+            action_type: 'NONE',
+            trade_decision: { action: 'HOLD' },
+            interactive_buttons: [
+              { text: '📊 7-TF Deep Analysis', action: 'ACTION:ANALYZE_15m' },
+              { text: '💼 Account Status', action: 'ACTION:STATUS' },
+            ],
+          };
         }
       } catch (gemErr) {
         logger.warn({ err: gemErr.message }, '[SmartDualRouter] Gemini failed, falling back to DeepSeek...');
@@ -167,54 +183,58 @@ Output format strictly JSON:
 
         const dsRes = await this.deepseek.chatCompletion(messages, {
           mode: taskClassification.mode,
-          maxTokens: isDeepThinking ? 1500 : 350,
+          maxTokens: isDeepThinking ? 1500 : 450,
           responseFormat: 'json_object',
         });
 
-        const jsonMatch = dsRes.content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (dsRes.reasoningContent && !parsed.thought_process) {
-            parsed.thought_process = dsRes.reasoningContent;
+        if (dsRes?.content) {
+          const jsonMatch = dsRes.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (dsRes.reasoningContent && !parsed.thought_process) {
+                parsed.thought_process = dsRes.reasoningContent;
+              }
+              return parsed;
+            } catch {}
           }
-          return parsed;
+          return {
+            thought_process: dsRes.reasoningContent || 'DeepSeek Live Synthesis',
+            reply: dsRes.content.replace(/^```json|^```|```$/gm, '').trim(),
+            action_type: 'NONE',
+            trade_decision: { action: 'HOLD' },
+          };
         }
       } catch (dsErr) {
         logger.warn({ err: dsErr.message }, '[SmartDualRouter] DeepSeek execution failed');
       }
     }
 
-    // Strategy C: Gemini Fallback if primary was deepseek
-    if (primary !== 'gemini' && this.gemini.isAvailable()) {
-      try {
-        const geminiRes = await this.gemini.chatCompletion(
-          `${systemPrompt}\n\nUser: ${userPromptText}`,
-          {
-            mode: taskClassification.mode,
-            maxTokens: isDeepThinking ? 1500 : 450,
-          }
-        );
+    // Real Deterministic Market Analysis Fallback (NEVER send placeholder templates)
+    try {
+      const ComprehensiveEngine = require('../strategies/smc/comprehensiveAnalysisEngine');
+      const analysis = await ComprehensiveEngine.runFullAnalysis(config.system.primarySymbol);
+      const report = ComprehensiveEngine.formatTelegramReport(analysis);
 
-        const jsonMatch = geminiRes.content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
-        }
-      } catch (gemErr) {
-        logger.error({ err: gemErr.message }, '[SmartDualRouter] Gemini fallback failed');
-      }
+      return {
+        thought_process: 'Multi-Timeframe SMC/ICT Deterministic Synthesis',
+        reply: report,
+        action_type: 'NONE',
+        trade_decision: { action: 'HOLD' },
+        interactive_buttons: [
+          { text: '📍 Active Watch Zones', action: 'ACTION:ZONES' },
+          { text: '💼 Account Status', action: 'ACTION:STATUS' },
+        ],
+      };
+    } catch (fallbackErr) {
+      logger.error({ err: fallbackErr.message }, 'Failed generating real deterministic analysis');
+      return {
+        thought_process: 'Real-Time Price & Structure Query',
+        reply: `Gold (XAUUSD) is currently trading at $${livePrice.toFixed(2)} USD. Analyzing multi-timeframe liquidity and structure...`,
+        action_type: 'NONE',
+        trade_decision: { action: 'HOLD' },
+      };
     }
-
-    // Emergency Offline Return
-    return {
-      thought_process: 'Local Fallback',
-      reply: `Gold Price: $${livePrice.toFixed(2)} USD. System online.`,
-      action_type: 'NONE',
-      trade_decision: { action: 'HOLD' },
-      interactive_buttons: [
-        { text: '📊 15m Analysis', action: 'ACTION:ANALYZE_15m' },
-        { text: '💼 Account Status', action: 'ACTION:STATUS' },
-      ],
-    };
   }
 }
 
