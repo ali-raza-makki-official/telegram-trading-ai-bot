@@ -187,6 +187,36 @@ class MetaApiClient extends EventEmitter {
     }
   }
 
+  async getHistoricalCandles(symbol = config.system.primarySymbol, timeframe = '15m', limit = 100) {
+    if (!this.isConnected || !this.rpcConnection) return null;
+    try {
+      const targetSymbol = this.resolveSymbol(symbol);
+      const metaTf = timeframe.toLowerCase();
+      let rawCandles = [];
+      if (typeof this.rpcConnection.getCandles === 'function') {
+        rawCandles = await this.rpcConnection.getCandles(targetSymbol, metaTf, undefined, limit);
+      } else if (typeof this.rpcConnection.getHistoricalCandles === 'function') {
+        rawCandles = await this.rpcConnection.getHistoricalCandles(targetSymbol, metaTf, undefined, limit);
+      }
+
+      if (rawCandles && rawCandles.length > 0) {
+        return rawCandles.map(c => ({
+          timestamp: new Date(c.time).getTime(),
+          time: new Date(c.time).toISOString(),
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          volume: c.tickVolume || c.volume || 100,
+        }));
+      }
+      return null;
+    } catch (err) {
+      logger.warn({ err: err.message, symbol, timeframe }, 'Could not fetch historical candles via MetaApi RPC');
+      return null;
+    }
+  }
+
   async getAccountSummary() {
     if (!this.isConnected) {
       return {

@@ -44,9 +44,26 @@ class MarketFeed extends EventEmitter {
 
   async seedInitialCandles() {
     const symbol = config.system.primarySymbol;
+    const metaApiClient = require('../execution/MetaApiClient');
+    
     for (const tf of config.system.timeframes) {
       await candleManager.loadFromDatabase(symbol, tf, 200);
-      const existing = candleManager.getCandles(symbol, tf);
+      let existing = candleManager.getCandles(symbol, tf);
+
+      // Fetch real historical broker candles if MetaApi is connected
+      if (existing.length < 50 && metaApiClient.isConnected) {
+        try {
+          const realCandles = await metaApiClient.getHistoricalCandles(symbol, tf, 100);
+          if (realCandles && realCandles.length > 0) {
+            candleManager.setCandles(symbol, tf, realCandles);
+            logger.info({ symbol, timeframe: tf, count: realCandles.length }, 'Seeded real historical candles directly from MetaApi Exness MT5');
+            existing = realCandles;
+          }
+        } catch (err) {
+          logger.debug({ err: err.message, tf }, 'MetaApi candle fetch fallback');
+        }
+      }
+
       if (existing.length < 50) {
         const mockHistory = generateRealisticGoldCandles({
           count: 100,
