@@ -323,8 +323,8 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
       await ctx.reply('▶️ *Trading Bot Resumed.* Autonomous scanning active.');
     });
 
-    // /performance (Unifies /accuracy, /history, /skills with zero duplication)
-    this.bot.command(['performance', 'accuracy', 'history', 'skills'], async (ctx) => {
+    // /performance (Single unified command for Win Rate, History & Learned Skills)
+    this.bot.command('performance', async (ctx) => {
       try {
         const accuracyTracker = require('../evaluator/accuracyTracker');
         const postTradeLearner = require('../orchestrator/postTradeLearner');
