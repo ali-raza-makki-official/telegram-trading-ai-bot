@@ -154,10 +154,9 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
 📋 *Core Commands:*
 
 🏛️ *Market Analysis & Zones:*
-• /analyze — Master 7-TF Deep Scan + Multi-Tiered Limits
-• /topdown — Daily Sweep (PDH/PDL) & 4H Draw on Liquidity
-• /zones (or /triggers) — Live AI Smart Watch & Trigger Levels
-• /schedule — Session Timers & ICT Killzones
+• /analyze — Master 7-TF Deep Scan + Tiered Limits
+• /zones — Live AI Smart Watch & Trigger Levels
+• /schedule — Market Sessions & ICT Killzones
 
 💼 *Execution & Portfolio:*
 • /positions — Active trades, live PnL & 1-tap close
@@ -166,10 +165,10 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
 • /mode \`[auto|semi|manual]\` — Change autonomy level
 
 🧠 *AI Performance & Status:*
-• /status — Live balance, equity, spread & AI bias
-• /performance — Unified Win Rate, History & Learned Skills
+• /status — Live balance, equity & market state
+• /performance — Win Rate, History & AI Learned Lessons
 • /pause / /resume — Toggle background scanning
-• /config — Dynamic Strategy parameters & risk limits
+• /config — Dynamic Strategy & Risk Settings
 `;
       await ctx.reply(msg, { parse_mode: 'Markdown' });
     });
@@ -374,39 +373,8 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
       }
     });
 
-    // /topdown — Institutional Top-Down Daily Sweep & 4H Target Setup
-    this.bot.command('topdown', async (ctx) => {
-      try {
-        const TopDownEngine = require('../strategies/smc/topDownLiquidity');
-        const result = TopDownEngine.analyzeTopDown(config.system.primarySymbol);
-
-        let text = `🏛️ *Institutional Top-Down Liquidity Analysis*\n`;
-        text += `• Asset: *${result.symbol}* | Price: \`$${result.currentPrice.toFixed(2)}\`\n`;
-        text += `• Previous Day High (PDH): \`$${result.pdh.toFixed(2)}\`\n`;
-        text += `• Previous Day Low (PDL): \`$${result.pdl.toFixed(2)}\`\n\n`;
-
-        if (result.dailySweep) {
-          text += `🎯 *Daily Liquidity Sweep Detected:*\n• Setup: *${result.dailySweep.type}* (${result.dailySweep.bias})\n• Detail: _${result.dailySweep.description}_\n• Invalidation (SL): \`$${result.dailySweep.invalidationSL.toFixed(2)}\`\n\n`;
-        } else {
-          text += `ℹ️ *Daily Sweep:* _Price trading within yesterday's range ($${result.pdl.toFixed(2)} - $${result.pdh.toFixed(2)})._\n\n`;
-        }
-
-        if (result.h4Target) {
-          text += `🎯 *4-Hour Draw on Liquidity (Target):*\n• Target Type: \`${result.h4Target.type}\`\n• Target Price: \`$${result.h4Target.price.toFixed(2)}\`\n• Potential Move: \`+${result.h4Target.potentialFallPips || result.h4Target.potentialRisePips} pips\`\n\n`;
-        }
-
-        if (result.proposedTrade) {
-          text += `⚡ *High-Probability Top-Down Trade Thesis:*\n• Action: *${result.proposedTrade.action}*\n• Entry: \`$${result.proposedTrade.entryPrice.toFixed(2)}\`\n• SL: \`$${result.proposedTrade.stopLoss.toFixed(2)}\` | TP: \`$${result.proposedTrade.takeProfit.toFixed(2)}\`\n• Risk:Reward: \`1:${result.proposedTrade.riskReward}\`\n`;
-        }
-
-        await ctx.reply(text, { parse_mode: 'Markdown' });
-      } catch (err) {
-        await ctx.reply(`❌ Error running top-down analysis: ${err.message}`);
-      }
-    });
-
-    // /zones & /triggers — Autonomous Trigger Levels & Smart Watch Target Zones
-    this.bot.command(['zones', 'triggers'], async (ctx) => {
+    // /zones — Autonomous Trigger Levels & Smart Watch Target Zones
+    this.bot.command('zones', async (ctx) => {
       try {
         const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
         const report = smartTrigger.formatTelegramReport(config.system.primarySymbol);
