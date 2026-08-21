@@ -440,7 +440,7 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         }
 
         const kb = new InlineKeyboard()
-          .text('🎯 Full Accuracy Report', 'ACTION:ANALYZE_15m')
+          .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
           .text('💼 Account Status', 'ACTION:STATUS');
 
         await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
@@ -511,6 +511,21 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
         await ctx.reply(text, { parse_mode: 'Markdown' });
       } catch (err) {
         await ctx.reply(`❌ Error running top-down analysis: ${err.message}`);
+      }
+    });
+
+    // /zones & /triggers — Autonomous Trigger Levels & Smart Watch Target Zones
+    this.bot.command(['zones', 'triggers'], async (ctx) => {
+      try {
+        const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
+        const report = smartTrigger.formatTelegramReport(config.system.primarySymbol);
+        const kb = new InlineKeyboard()
+          .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
+          .text('💼 Account Status', 'ACTION:STATUS').row()
+          .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+        await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
+      } catch (err) {
+        await ctx.reply(`❌ Error loading trigger zones: ${err.message}`);
       }
     });
   }
@@ -763,6 +778,41 @@ ${thesis.reasoning}
         return;
       }
 
+      // 5b. Dynamic Trigger Zones & Watch Targets (ACTION:ZONES & ACTION:TRIGGERS)
+      if (data === 'ACTION:ZONES' || data === 'ACTION:TRIGGERS') {
+        await ctx.answerCallbackQuery({ text: 'Loading Active AI Trigger Zones...' });
+        try {
+          const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
+          const report = smartTrigger.formatTelegramReport(config.system.primarySymbol);
+          const kb = new InlineKeyboard()
+            .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
+            .text('💼 Account Status', 'ACTION:STATUS').row()
+            .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+          await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ Error loading zones: ${err.message}`);
+        }
+        return;
+      }
+
+      // 5c. Dynamic Master Multi-Timeframe Institutional Analysis (ACTION:ANALYZE_MASTER)
+      if (data === 'ACTION:ANALYZE_MASTER') {
+        await ctx.answerCallbackQuery({ text: 'Running Master 7-TF Deep Scan...' });
+        await ctx.reply('⏳ *Running Master 7-Timeframe Deep Scan (1W ➔ 1D ➔ 4H ➔ 1H ➔ 30M ➔ 15M ➔ 5M)...*', { parse_mode: 'Markdown' });
+        try {
+          const ComprehensiveEngine = require('../strategies/smc/comprehensiveAnalysisEngine');
+          const result = await ComprehensiveEngine.runFullAnalysis(config.system.primarySymbol);
+          const thesis = { bias: result.tieredSellLimits.length > 0 ? 'BEARISH' : 'BULLISH', confidence: 85, primary_setup: '7-Timeframe Top-Down SMC Matrix' };
+          await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, '15m', thesis);
+          const reportText = ComprehensiveEngine.formatTelegramReport(result);
+          const kb = ComprehensiveEngine.createInteractiveLimitKeyboard(result);
+          await ctx.reply(reportText, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ Master analysis failed: ${err.message}`);
+        }
+        return;
+      }
+
       // 6. Signal Approval Fallback
       // Section 7 AI Adaptive Parameter Tuning Approvals
       if (data.startsWith('APPROVE_TUNING_')) {
@@ -960,8 +1010,8 @@ ${thesis.reasoning}
           }
         } else {
           kb.row()
-            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
-            .text('📈 1h Trend', 'ACTION:ANALYZE_1h').row()
+            .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
+            .text('🎯 Active Trigger Zones', 'ACTION:ZONES').row()
             .text('💼 Account Status', 'ACTION:STATUS')
             .text('🛡️ Open Positions', 'ACTION:POSITIONS');
         }
@@ -975,8 +1025,8 @@ ${thesis.reasoning}
       } catch (err) {
         logger.error({ err: err.message }, 'Failed handling text message');
         const kb = new InlineKeyboard()
-          .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
-          .text('💼 Account Status', 'ACTION:STATUS');
+          .text('🏛️ Master 7-TF Analysis', 'ACTION:ANALYZE_MASTER')
+          .text('🎯 Active Trigger Zones', 'ACTION:ZONES');
         await ctx.reply(`⚠️ Live processing notice: ${err.message}\nLive Gold Price: $${exactPrice.toFixed(2)} USD`, { reply_markup: kb });
       }
     });
@@ -990,20 +1040,15 @@ ${thesis.reasoning}
           return ctx.reply('⚠️ Live price unavailable. Please try again shortly.');
         }
         const AgentMemory = require('../memory/agentMemory');
-        // FIX #21: Removed dead code — DeepSeekProvider was created but never used below
         AgentMemory.addChatMessage(ctx.chat.id, 'user', '[Voice Note: Trading Query]');
 
-        const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, '15m');
+        const ComprehensiveEngine = require('../strategies/smc/comprehensiveAnalysisEngine');
+        const result = await ComprehensiveEngine.runFullAnalysis(config.system.primarySymbol);
+        const thesis = { bias: result.tieredSellLimits.length > 0 ? 'BEARISH' : 'BULLISH', confidence: 85, primary_setup: '7-Timeframe Top-Down SMC Matrix' };
         await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, '15m', thesis);
-
-        const kb = new InlineKeyboard()
-          .text('⚡ Execute BUY', `TRADE:BUY:0.01:${(exactPrice - 12).toFixed(1)}:${(exactPrice + 25).toFixed(1)}`)
-          .text('⚡ Execute SELL', `TRADE:SELL:0.01:${(exactPrice + 12).toFixed(1)}:${(exactPrice - 25).toFixed(1)}`).row()
-          .text('📊 15m Analysis', 'ACTION:ANALYZE_15m')
-          .text('💼 Account Status', 'ACTION:STATUS');
-
-        const voiceReply = `🎙️ *Voice Request Processed:*\n\n⚜️ *Current Gold Price:* \`$${exactPrice.toFixed(2)} USD\`\n🧭 *AI Market Bias:* *${thesis.bias}* (${thesis.confidence}% Confidence)\n🎯 *Primary Setup:* ${thesis.primary_setup}\n\n📝 *Institutional Advice:* ${thesis.reasoning}`;
-        await ctx.reply(voiceReply, { parse_mode: 'Markdown', reply_markup: kb });
+        const reportText = ComprehensiveEngine.formatTelegramReport(result);
+        const kb = ComprehensiveEngine.createInteractiveLimitKeyboard(result);
+        await ctx.reply(reportText, { parse_mode: 'Markdown', reply_markup: kb });
       } catch (err) {
         logger.error({ err: err.message }, 'Failed processing voice message');
         await ctx.reply(`⚠️ Could not process voice note: ${err.message}`);

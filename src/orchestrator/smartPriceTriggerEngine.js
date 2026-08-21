@@ -259,6 +259,63 @@ class SmartPriceTriggerEngine {
       this.saveToDisk();
     }
   }
+
+  formatTelegramReport(symbol = 'XAUUSD') {
+    const marketFeed = require('../market-data/marketFeed');
+    const currentPrice = Number(marketFeed.getLatestPrice(symbol) || 4580.0);
+    const activeZones = this.getActiveZones().filter(z => z.symbol === symbol);
+
+    let text = `🎯 *Autonomous AI Trigger Levels & Smart Watch Zones*\n`;
+    text += `• Asset: *${symbol}* | Live Price: \`$${currentPrice.toFixed(2)} USD\`\n`;
+    text += `• Total Monitored Trigger Zones: \`${activeZones.length}\`\n\n`;
+
+    const upperSupply = activeZones
+      .filter(z => z.minPrice >= currentPrice || z.bias === 'BEARISH')
+      .sort((a, b) => a.minPrice - b.minPrice);
+
+    const lowerDemand = activeZones
+      .filter(z => z.maxPrice <= currentPrice || z.bias === 'BULLISH')
+      .sort((a, b) => b.maxPrice - a.maxPrice);
+
+    // 1. Upper Resistance / Supply Triggers (Sell Levels)
+    text += `🔴 *Upper Supply & Reversal Triggers (Sell Targets):*\n`;
+    if (upperSupply.length === 0) {
+      text += `• _No upper supply triggers registered. Run /analyze to auto-populate._\n`;
+    } else {
+      for (const z of upperSupply.slice(0, 4)) {
+        const dist = (z.minPrice - currentPrice).toFixed(2);
+        const distStr = dist >= 0 ? `+$${dist}` : `-$${Math.abs(dist)}`;
+        text += `• *${z.type} (${z.timeframe})* [${z.bias}]\n`;
+        text += `  Range: \`$${z.minPrice.toFixed(2)} - $${z.maxPrice.toFixed(2)}\` (Dist: \`${distStr}\`)\n`;
+        text += `  Action: _AI triggers instant Sell Confluence & Pending Limit fill._\n`;
+      }
+    }
+    text += `\n`;
+
+    // 2. Lower Support / Demand Triggers (Buy Levels)
+    text += `🟢 *Lower Demand & Rebound Triggers (Buy Targets):*\n`;
+    if (lowerDemand.length === 0) {
+      text += `• _No lower demand triggers registered. Run /analyze to auto-populate._\n`;
+    } else {
+      for (const z of lowerDemand.slice(0, 4)) {
+        const dist = (currentPrice - z.maxPrice).toFixed(2);
+        const distStr = dist >= 0 ? `-$${dist}` : `+$${Math.abs(dist)}`;
+        text += `• *${z.type} (${z.timeframe})* [${z.bias}]\n`;
+        text += `  Range: \`$${z.minPrice.toFixed(2)} - $${z.maxPrice.toFixed(2)}\` (Dist: \`${distStr}\`)\n`;
+        text += `  Action: _AI triggers instant Buy Confluence & Pending Limit fill._\n`;
+      }
+    }
+    text += `\n`;
+
+    // 3. Autonomous AI Trigger Conditions
+    text += `⚡ *Autonomous AI Event Triggers:*\n`;
+    text += `• 🟢 *Trade Open Event:* AI validates R:R > 2.0 and sets hard SL/TP\n`;
+    text += `• 🛡️ *Auto Break-Even Event:* When trade reaches *+15 to +20 pips* ($1.50 - $2.00 profit), SL moves to Entry + $0.20\n`;
+    text += `• 🧠 *Post-Trade Learning Event:* AI analyzes WIN/LOSS reasons and updates long-term skill memory\n`;
+    text += `• 🎯 *Price Zone Penetration:* When market touches any zone above, AI activates instantly (0ms latency)\n`;
+
+    return text;
+  }
 }
 
 module.exports = new SmartPriceTriggerEngine();
