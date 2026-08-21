@@ -44,14 +44,16 @@ class MarketScheduler extends EventEmitter {
   checkSessionTransitions() {
     const sessionInfo = getCurrentSessionInfo();
 
-    // Check Killzone Transition
+    // Check Killzone Transition with 30-minute debounce
     const currentKz = sessionInfo.activeKillzone ? sessionInfo.activeKillzone.key : null;
-    if (this.lastSessionState !== currentKz) {
+    const now = Date.now();
+    if (currentKz && this.lastSessionState !== currentKz && (!this.lastKzTime || now - this.lastKzTime > 30 * 60 * 1000)) {
       this.lastSessionState = currentKz;
-      if (sessionInfo.activeKillzone) {
-        logger.info({ killzone: sessionInfo.activeKillzone.name }, 'Entered ICT Killzone');
-        this.emit('killzoneEnter', sessionInfo.activeKillzone);
-      }
+      this.lastKzTime = now;
+      logger.info({ killzone: sessionInfo.activeKillzone.name }, 'Entered ICT Killzone');
+      this.emit('killzoneEnter', sessionInfo.activeKillzone);
+    } else if (!currentKz) {
+      this.lastSessionState = null;
     }
 
     // Check Friday Close Warning

@@ -532,7 +532,7 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       if (data.startsWith('ACTION:ANALYZE_')) {
         const tf = data.replace('ACTION:ANALYZE_', '');
         await ctx.answerCallbackQuery({ text: `Analyzing ${tf} Gold structure...` });
-        await ctx.reply(`🔍 *Running DeepSeek AI analysis for ${tf} timeframe...*`, { parse_mode: 'Markdown' });
+        await ctx.reply(`🔍 *Running Google Gemini Multimodal AI analysis for ${tf} timeframe...*`, { parse_mode: 'Markdown' });
 
         try {
           const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, tf);
