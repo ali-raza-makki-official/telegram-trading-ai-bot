@@ -75,6 +75,8 @@ class TelegramBotService {
         { command: 'execute', description: '⚡ Execute: /execute [buy/sell] [lot] [sl] [tp]' },
         { command: 'close', description: '❌ Close: /close [ticket|all]' },
         { command: 'mode', description: '⚙️ Autonomy Mode: /mode [auto|semi|manual]' },
+        { command: 'topdown', description: '🏛️ Top-Down Daily Sweep & 4H Target' },
+        { command: 'skills', description: '🧠 AI Learned Skills & Trade Lessons' },
         { command: 'zones', description: '📍 Smart Price Watch Zones & Triggers' },
         { command: 'config', description: '🔧 Strategy Weights & Dynamic Config' },
         { command: 'accuracy', description: '🎯 AI Prediction Win Rate & Accuracy' },
@@ -345,31 +347,15 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       await ctx.reply(msg, { parse_mode: 'Markdown' });
     });
 
-    // /zones — Smart Price Watch Zones & Liquidity Triggers
+    // /zones — Two-Sided Smart Price Watch Zones & Liquidity Triggers
     this.bot.command('zones', async (ctx) => {
-      const smartTrigger = require('../orchestrator/smartPriceTriggerEngine');
-      const zones = smartTrigger.getActiveZones();
-      const currentPrice = require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4519.0;
-
-      if (zones.length === 0) {
-        return ctx.reply(
-          `📍 *Smart Price Watch Zones*\n\n• Current Gold Price: \`$${Number(currentPrice).toFixed(2)}\`\n• Active Watch Zones: *0*\n\n_Run /analyze to scan and auto-register new Order Blocks, FVGs and Liquidity pools._`,
-          { parse_mode: 'Markdown' }
-        );
+      try {
+        const MultiTimeframeScanner = require('../strategies/smc/multiTimeframeScanner');
+        const report = MultiTimeframeScanner.formatTelegramReport(config.system.primarySymbol);
+        await ctx.reply(report, { parse_mode: 'Markdown' });
+      } catch (err) {
+        await ctx.reply(`❌ Error loading zones: ${err.message}`);
       }
-
-      let text = `📍 *Smart Price Action Watch Zones (${zones.length} Active)*\n`;
-      text += `• Current Gold Price: \`$${Number(currentPrice).toFixed(2)} USD\`\n\n`;
-
-      for (const z of zones.slice(0, 6)) {
-        const dist = Math.abs(currentPrice - ((z.minPrice + z.maxPrice) / 2)).toFixed(1);
-        text += `🎯 *${z.type}* (${z.timeframe} | ${z.bias})\n`;
-        text += `• Range: \`$${z.minPrice.toFixed(2)} - $${z.maxPrice.toFixed(2)}\` (Distance: $${dist})\n`;
-        text += `• Context: _${z.description}_\n\n`;
-      }
-
-      text += '_When price hits any of these zones, the AI triggers an instant re-analysis without wasting tokens!_';
-      await ctx.reply(text, { parse_mode: 'Markdown' });
     });
 
     // /config — Dynamic Strategy Config & Adaptive Parameter Store (Section 7)
@@ -448,6 +434,70 @@ _Past predictions and outcomes are fed into the LLM context memory to continuous
       } catch (err) {
         logger.error({ err: err.message }, 'Failed to fetch prediction history');
         await ctx.reply(`❌ Could not load history: ${err.message}`);
+      }
+    });
+
+    // /skills — Autonomous Learned Skills & Retrospective Memory
+    this.bot.command('skills', async (ctx) => {
+      try {
+        const postTradeLearner = require('../orchestrator/postTradeLearner');
+        const summary = postTradeLearner.getSkillsSummary();
+
+        let text = `🧠 *Autonomous AI Learned Skills & Strategy Evolution*\n\n`;
+        text += `• Total Closed Trades Analyzed: *${summary.totalEvaluated}*\n`;
+        text += `• AI Win Rate: *${summary.winRate}%* (Wins: ${summary.wins} | Losses: ${summary.losses} | Break-Evens: ${summary.breakEvens})\n\n`;
+
+        const patterns = Object.values(summary.learnedPatterns || {});
+        if (patterns.length === 0) {
+          text += `_No closed trades logged yet. As trades execute, AI will continuously learn from wins, losses, and break-evens!_\n`;
+        } else {
+          text += `📚 *Evolving Strategy Confidence Library:*\n`;
+          for (const p of patterns.slice(0, 5)) {
+            text += `• *${p.name}*\n  Confidence: \`${p.confidenceScore.toFixed(1)}%\` | W/L/BE: \`${p.winCount}/${p.lossCount}/${p.breakEvenCount}\`\n`;
+          }
+        }
+
+        if (summary.recentLogs && summary.recentLogs.length > 0) {
+          text += `\n📝 *Recent Trade Lessons:*\n`;
+          for (const log of summary.recentLogs.slice(-3)) {
+            text += `• ${log.lesson}\n`;
+          }
+        }
+
+        await ctx.reply(text, { parse_mode: 'Markdown' });
+      } catch (err) {
+        await ctx.reply(`❌ Error loading skills: ${err.message}`);
+      }
+    });
+
+    // /topdown — Institutional Top-Down Daily Sweep & 4H Target Setup
+    this.bot.command('topdown', async (ctx) => {
+      try {
+        const TopDownEngine = require('../strategies/smc/topDownLiquidity');
+        const result = TopDownEngine.analyzeTopDown(config.system.primarySymbol);
+
+        let text = `🏛️ *Institutional Top-Down Liquidity Analysis*\n`;
+        text += `• Asset: *${result.symbol}* | Price: \`$${result.currentPrice.toFixed(2)}\`\n`;
+        text += `• Previous Day High (PDH): \`$${result.pdh.toFixed(2)}\`\n`;
+        text += `• Previous Day Low (PDL): \`$${result.pdl.toFixed(2)}\`\n\n`;
+
+        if (result.dailySweep) {
+          text += `🎯 *Daily Liquidity Sweep Detected:*\n• Setup: *${result.dailySweep.type}* (${result.dailySweep.bias})\n• Detail: _${result.dailySweep.description}_\n• Invalidation (SL): \`$${result.dailySweep.invalidationSL.toFixed(2)}\`\n\n`;
+        } else {
+          text += `ℹ️ *Daily Sweep:* _Price trading within yesterday's range ($${result.pdl.toFixed(2)} - $${result.pdh.toFixed(2)})._\n\n`;
+        }
+
+        if (result.h4Target) {
+          text += `🎯 *4-Hour Draw on Liquidity (Target):*\n• Target Type: \`${result.h4Target.type}\`\n• Target Price: \`$${result.h4Target.price.toFixed(2)}\`\n• Potential Move: \`+${result.h4Target.potentialFallPips || result.h4Target.potentialRisePips} pips\`\n\n`;
+        }
+
+        if (result.proposedTrade) {
+          text += `⚡ *High-Probability Top-Down Trade Thesis:*\n• Action: *${result.proposedTrade.action}*\n• Entry: \`$${result.proposedTrade.entryPrice.toFixed(2)}\`\n• SL: \`$${result.proposedTrade.stopLoss.toFixed(2)}\` | TP: \`$${result.proposedTrade.takeProfit.toFixed(2)}\`\n• Risk:Reward: \`1:${result.proposedTrade.riskReward}\`\n`;
+        }
+
+        await ctx.reply(text, { parse_mode: 'Markdown' });
+      } catch (err) {
+        await ctx.reply(`❌ Error running top-down analysis: ${err.message}`);
       }
     });
   }
@@ -716,6 +766,50 @@ ${thesis.reasoning}
       const exactPrice = Number(require('../market-data/marketFeed').getLatestPrice(config.system.primarySymbol) || 4518.74);
       const lowerText = text.toLowerCase();
 
+      // Top-Down Entry Zone / Sweep Intent
+      if (
+        lowerText.includes('entry zone') ||
+        lowerText.includes('entry kahan') ||
+        lowerText.includes('nakalo') ||
+        lowerText.includes('nikalo') ||
+        lowerText.includes('topdown') ||
+        lowerText.includes('daily sweep') ||
+        lowerText.includes('target kya')
+      ) {
+        await ctx.reply('🏛️ *Analyzing Top-Down Liquidity Hierarchy (Daily Sweep -> 4H Target -> 15m Entry)...*', { parse_mode: 'Markdown' });
+        try {
+          const TopDownEngine = require('../strategies/smc/topDownLiquidity');
+          const result = TopDownEngine.analyzeTopDown(config.system.primarySymbol);
+
+          let text = `🏛️ *Institutional Top-Down Entry Setup*\n`;
+          text += `• Asset: *${result.symbol}* | Price: \`$${Number(result.currentPrice || exactPrice).toFixed(2)}\`\n`;
+          text += `• PDH: \`$${Number(result.pdh || exactPrice + 10).toFixed(2)}\` | PDL: \`$${Number(result.pdl || exactPrice - 10).toFixed(2)}\`\n\n`;
+
+          if (result.dailySweep) {
+            text += `🎯 *Daily Liquidity Sweep:* *${result.dailySweep.type}* (${result.dailySweep.bias})\n• Detail: _${result.dailySweep.description}_\n• Invalidation (SL): \`$${result.dailySweep.invalidationSL.toFixed(2)}\`\n\n`;
+          }
+
+          if (result.h4Target) {
+            text += `🎯 *4-Hour Target:* \`${result.h4Target.type}\` @ \`$${result.h4Target.price.toFixed(2)}\`\n\n`;
+          }
+
+          if (result.proposedTrade) {
+            text += `⚡ *Recommended Trade:* *${result.proposedTrade.action}*\n• Entry: \`$${result.proposedTrade.entryPrice.toFixed(2)}\`\n• SL: \`$${result.proposedTrade.stopLoss.toFixed(2)}\` | TP: \`$${result.proposedTrade.takeProfit.toFixed(2)}\`\n• R:R: \`1:${result.proposedTrade.riskReward}\`\n• Rationale: _${result.proposedTrade.rationale}_\n`;
+          } else {
+            text += `ℹ️ *Action:* _Price inside yesterday's range. Standing aside until key PDH/PDL or 4H Zone is tested._\n`;
+          }
+
+          const kb = new InlineKeyboard()
+            .text('📍 Active Watch Zones', 'ACTION:ZONES')
+            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m');
+
+          await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: kb });
+          return;
+        } catch (tdErr) {
+          logger.error({ err: tdErr.message }, 'Failed running top-down intent');
+        }
+      }
+
       // Multi-Timeframe Order Block & Zone Search Intent
       if (
         lowerText.includes('order block') ||
@@ -727,7 +821,7 @@ ${thesis.reasoning}
         lowerText.includes('kahan kahan') ||
         lowerText.includes('find kro')
       ) {
-        await ctx.reply('🔍 *Scanning Order Blocks, FVGs & Liquidity across all timeframes (5m, 15m, 30m, 1h, 4h, 1D)...*', { parse_mode: 'Markdown' });
+        await ctx.reply('🔍 *Scanning Order Blocks, FVGs & Liquidity across all timeframes (1m, 5m, 15m, 30m, 1h, 4h, 1D)...*', { parse_mode: 'Markdown' });
         try {
           const MultiTimeframeScanner = require('../strategies/smc/multiTimeframeScanner');
           const report = MultiTimeframeScanner.formatTelegramReport(config.system.primarySymbol);
