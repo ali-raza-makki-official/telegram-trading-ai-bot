@@ -357,6 +357,38 @@ class ComprehensiveAnalysisEngine {
     text += `📍 *How to Trade:* _Tap any pending limit button below to place the order on Exness MT5 with automatic break-even lock & AI learning!_`;
     return text;
   }
+
+  static createInteractiveLimitKeyboard(fullData) {
+    const { InlineKeyboard } = require('grammy');
+    const kb = new InlineKeyboard();
+
+    if (!fullData) return kb;
+
+    // Row 1: Primary Tier-1 Limits
+    const b1 = fullData.tieredBuyLimits?.[0];
+    const s1 = fullData.tieredSellLimits?.[0];
+    if (b1) kb.text(`📥 BUY Limit 1 @ $${b1.price.toFixed(1)}`, `LMT:B:0.01:${b1.price}:${b1.sl}:${b1.tp}`);
+    if (s1) kb.text(`📤 SELL Limit 1 @ $${s1.price.toFixed(1)}`, `LMT:S:0.01:${s1.price}:${s1.sl}:${s1.tp}`).row();
+
+    // Row 2: Secondary Tier-2 Limits
+    const b2 = fullData.tieredBuyLimits?.[1];
+    const s2 = fullData.tieredSellLimits?.[1];
+    if (b2) kb.text(`📥 BUY Limit 2 @ $${b2.price.toFixed(1)}`, `LMT:B:0.01:${b2.price}:${b2.sl}:${b2.tp}`);
+    if (s2) kb.text(`📤 SELL Limit 2 @ $${s2.price.toFixed(1)}`, `LMT:S:0.01:${s2.price}:${s2.sl}:${s2.tp}`).row();
+
+    // Row 3: Tertiary Limit
+    const b3 = fullData.tieredBuyLimits?.[2];
+    const s3 = fullData.tieredSellLimits?.[2];
+    if (b3 && s3) {
+      kb.text(`📥 BUY Lmt 3 @ $${b3.price.toFixed(1)}`, `LMT:B:0.01:${b3.price}:${b3.sl}:${b3.tp}`)
+        .text(`📤 SELL Lmt 3 @ $${s3.price.toFixed(1)}`, `LMT:S:0.01:${s3.price}:${s3.sl}:${s3.tp}`).row();
+    }
+
+    kb.text('🎯 Active Trigger Zones', 'ACTION:ZONES')
+      .text('💼 Account Status', 'ACTION:STATUS');
+
+    return kb;
+  }
 }
 
 module.exports = ComprehensiveAnalysisEngine;
