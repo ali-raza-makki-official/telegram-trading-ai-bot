@@ -13,6 +13,10 @@ const SKILLS_FILE = path.resolve(process.cwd(), 'data', 'ai_learned_skills.json'
 class PostTradeLearner {
   constructor() {
     this.skills = this.loadSkills();
+    // FIX #28: Cooldown tracking — prevent rapid auto-tuning that causes overfitting
+    // Map<paramKey, lastTuneTimestamp>
+    this.lastTuneTime = new Map();
+    this.tuneCooldownMs = 6 * 60 * 60 * 1000; // 6 hours between auto-tunes per parameter
   }
 
   loadSkills() {
@@ -84,15 +88,13 @@ class PostTradeLearner {
     if (outcome === 'WIN') {
       pattern.winCount++;
       pattern.confidenceScore = Math.min(95.0, pattern.confidenceScore + 3.5);
-      retrospectiveLesson = `✅ Validated ${patternKey}: Entry at $${entryPrice} reached target with +$${pnl.toFixed(2)} profit. Strategy confidence boosted to ${pattern.confidenceScore.toFixed(1)}%.`;
+      retrospectiveLesson = `✅ Validated ${patternKey}: Entry at $${entryPrice} reached target with +$${pnl.toFixed(2)} profit. Strategy confidence boosted to ${pattern.confidenceScore.toFixed(1)}.`;
 
-      // Auto-tune SMC / ICT weights positively in dynamicConfig
+      // FIX #28: Auto-tune with cooldown — prevent rapid overfitting
       if (patternKey.includes('SMC') || patternKey.includes('ORDER_BLOCK')) {
-        const currentWeight = dynamicConfig.get('weights.smc') || 30.0;
-        dynamicConfig.set('weights.smc', Math.min(50.0, currentWeight + 1.0), 'ai_learner_win_calibration');
+        this._safeTune('weights.smc', 1.0, 50.0, 'ai_learner_win_calibration');
       } else if (patternKey.includes('LIQUIDITY') || patternKey.includes('PDH') || patternKey.includes('PDL')) {
-        const currentWeight = dynamicConfig.get('weights.ict') || 25.0;
-        dynamicConfig.set('weights.ict', Math.min(45.0, currentWeight + 1.0), 'ai_learner_win_calibration');
+        this._safeTune('weights.ict', 1.0, 45.0, 'ai_learner_win_calibration');
       }
     }
 
@@ -114,11 +116,8 @@ class PostTradeLearner {
       pattern.confidenceScore = Math.max(25.0, pattern.confidenceScore - 4.0);
       retrospectiveLesson = `⚠️ Invalidation on ${patternKey}: Stop loss hit (-$${Math.abs(pnl).toFixed(2)}). Higher timeframe structure shift or volatility expansion required wider buffer. Confidence adjusted to ${pattern.confidenceScore.toFixed(1)}%.`;
 
-      // Slightly increase minimum confluence threshold to demand cleaner confirmations
-      const currentThresh = dynamicConfig.get('confluence.min_threshold') || 50.0;
-      if (currentThresh < 65.0) {
-        dynamicConfig.set('confluence.min_threshold', currentThresh + 0.5, 'ai_learner_loss_risk_guard');
-      }
+      // FIX #28: Increase confluence threshold with cooldown to prevent overfitting
+      this._safeTune('confluence.min_threshold', 0.5, 65.0, 'ai_learner_loss_risk_guard');
     }
 
     pattern.lessons.push({
@@ -150,6 +149,28 @@ class PostTradeLearner {
 
     logger.info({ ticket, outcome, pnl, pattern: patternKey }, '🎯 PostTradeLearner recorded trade retrospective');
     return logEntry;
+  }
+
+  // FIX #28: Safe auto-tune with cooldown — only tunes once per parameter per cooldown period
+  _safeTune(paramKey, increment, maxValue, reason) {
+    const now = Date.now();
+    const lastTune = this.lastTuneTime.get(paramKey) || 0;
+    if (now - lastTune < this.tuneCooldownMs) {
+      logger.debug({ paramKey, lastTune: new Date(lastTune).toISOString() }, 'Auto-tune skipped — cooldown active');
+      return;
+    }
+
+    try {
+      const current = dynamicConfig.get(paramKey) || 0;
+      const newVal = Math.min(maxValue, current + increment);
+      if (newVal !== current) {
+        dynamicConfig.set(paramKey, newVal, reason);
+        this.lastTuneTime.set(paramKey, now);
+        logger.info({ paramKey, old: current, new: newVal }, 'Auto-tune applied (cooldown passed)');
+      }
+    } catch (err) {
+      logger.warn({ err: err.message, paramKey }, 'Auto-tune failed');
+    }
   }
 
   getSkillsSummary() {

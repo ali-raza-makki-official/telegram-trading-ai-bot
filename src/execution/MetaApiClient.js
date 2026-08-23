@@ -21,6 +21,18 @@ class MetaApiClient extends EventEmitter {
     // FIX #4: Daily PnL tracking (session-based)
     this.sessionStartBalance = null;
     this.dailyPnlCache = 0;
+    // FIX #23: Connection timeout — prevent hanging indefinitely
+    this.connectionTimeoutMs = 90000; // 90 seconds max for full connection sequence
+  }
+
+  // FIX #23: Helper to race a promise against a timeout
+  _withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`MetaApi ${label} timed out after ${ms / 1000}s`)), ms)
+      ),
+    ]);
   }
 
   isConfigured() {
@@ -57,19 +69,19 @@ class MetaApiClient extends EventEmitter {
         await this.account.deploy();
       }
 
-      // Wait for broker connection
-      logger.info('Waiting for MetaApi connection to broker...');
-      await this.account.waitConnected();
+      // FIX #23: Wait for broker connection with timeout
+      logger.info('Waiting for MetaApi connection to broker (90s timeout)...');
+      await this._withTimeout(this.account.waitConnected(), 45000, 'waitConnected');
 
       // 1. Establish Streaming WebSocket Connection for real-time prices & sync
       this.streamingConnection = this.account.getStreamingConnection();
-      await this.streamingConnection.connect();
-      await this.streamingConnection.waitSynchronized();
+      await this._withTimeout(this.streamingConnection.connect(), 20000, 'streaming.connect');
+      await this._withTimeout(this.streamingConnection.waitSynchronized(), 25000, 'streaming.waitSynchronized');
 
       // 2. Establish RPC Connection for deterministic trade execution
       this.rpcConnection = this.account.getRPCConnection();
-      await this.rpcConnection.connect();
-      await this.rpcConnection.waitSynchronized();
+      await this._withTimeout(this.rpcConnection.connect(), 20000, 'rpc.connect');
+      await this._withTimeout(this.rpcConnection.waitSynchronized(), 25000, 'rpc.waitSynchronized');
 
       this.reconnectAttempts = 0; // Reset on success
       this.isConnected = true;

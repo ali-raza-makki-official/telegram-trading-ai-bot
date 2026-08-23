@@ -24,6 +24,12 @@ class TelegramBotService {
     // Map<token, expiryTimestamp>
     this.processedActionTokens = new Map();
     this._startTokenCleanup();
+
+    // FIX #25: Auth rate limiting — prevent brute-force password guessing
+    // Map<chatId, { attempts, lockedUntil }>
+    this.authAttempts = new Map();
+    this.maxAuthAttempts = 5;
+    this.authLockoutMs = 15 * 60 * 1000; // 15 minutes lockout
   }
 
   // FIX #13b: Clean expired tokens every 15 minutes to prevent memory leak
@@ -109,14 +115,25 @@ class TelegramBotService {
   }
 
   setupCommands() {
-    // /auth [password]
+    // /auth [password] — with rate limiting
     this.bot.command('auth', async (ctx) => {
+      const chatId = ctx.chat.id;
       const parts = ctx.message.text.trim().split(/\s+/);
       const pass = parts[1];
 
+      // FIX #25: Check lockout
+      const record = this.authAttempts.get(chatId);
+      if (record && record.lockedUntil && Date.now() < record.lockedUntil) {
+        const minsLeft = Math.ceil((record.lockedUntil - Date.now()) / 60000);
+        logger.warn({ chatId, user: ctx.from?.username }, 'Auth attempt while locked out');
+        return ctx.reply(`⛔ *Too many failed attempts.* Try again in ${minsLeft} minutes.`, { parse_mode: 'Markdown' });
+      }
+
       if (pass === config.telegram.adminPassword) {
-        this.adminChatId = ctx.chat.id;
-        await SettingsRepo.set('admin_chat_id', ctx.chat.id);
+        // Success — clear attempts
+        this.authAttempts.delete(chatId);
+        this.adminChatId = chatId;
+        await SettingsRepo.set('admin_chat_id', chatId);
         logger.info({ adminChatId: this.adminChatId, user: ctx.from?.username }, 'Admin authenticated via password in Telegram');
         
         await ctx.reply(
@@ -124,8 +141,20 @@ class TelegramBotService {
           { parse_mode: 'Markdown' }
         );
       } else {
+        // Wrong password — increment attempts
+        if (!record) {
+          this.authAttempts.set(chatId, { attempts: 1, lockedUntil: null });
+        } else {
+          record.attempts++;
+          if (record.attempts >= this.maxAuthAttempts) {
+            record.lockedUntil = Date.now() + this.authLockoutMs;
+            logger.warn({ chatId, user: ctx.from?.username, attempts: record.attempts }, 'Auth locked out after too many failed attempts');
+            return ctx.reply(`⛔ *Account locked for 15 minutes* after ${this.maxAuthAttempts} failed attempts.`, { parse_mode: 'Markdown' });
+          }
+        }
+        const remaining = this.maxAuthAttempts - (record?.attempts || 1);
         await ctx.reply(
-          `❌ *Invalid Password!*\n\nPlease use: \`/auth [your_admin_password]\``,
+          `❌ *Invalid Password!* (${remaining} attempts remaining)\n\nPlease use: \`/auth [your_admin_password]\``,
           { parse_mode: 'Markdown' }
         );
       }

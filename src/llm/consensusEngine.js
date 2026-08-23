@@ -63,7 +63,9 @@ Return ONLY a valid JSON object:
 `;
 
       const secondaryResponse = await secondary.generateThesis(reviewPrompt);
-      const agree = secondaryResponse.bias === primaryThesis.bias || secondaryResponse.confidence >= 65;
+      // FIX #26: NEUTRAL with high confidence should NOT agree with BULLISH/BEARISH
+      // Only agree if secondary model confirms the same directional bias
+      const agree = secondaryResponse.bias === primaryThesis.bias;
 
       const combinedScore = agree
         ? Math.min(95, Math.round((primaryThesis.confidence + (secondaryResponse.confidence || 75)) / 2 + 10))
