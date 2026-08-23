@@ -225,6 +225,20 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
       }
     });
 
+    // /chart [timeframe] — Send on-demand live visual SMC chart snapshot
+    this.bot.command('chart', async (ctx) => {
+      const parts = ctx.message.text.trim().split(/\s+/);
+      const tf = parts[1]?.toLowerCase() || '15m';
+      await ctx.reply(`📸 *Generating real-time visual SMC chart for XAU/USD (${tf})...*`, { parse_mode: 'Markdown' });
+      try {
+        const thesis = await this.orchestrator.runOnDemandAnalysis(config.system.primarySymbol, tf);
+        await this.sendSMCChartPhoto(ctx, config.system.primarySymbol, tf, thesis);
+      } catch (err) {
+        logger.error({ err: err.message }, 'Failed /chart command');
+        await ctx.reply(`❌ Chart rendering failed: ${err.message}`);
+      }
+    });
+
     // /execute
     this.bot.command('execute', async (ctx) => {
       const parts = ctx.message.text.trim().split(/\s+/);
