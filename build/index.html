@@ -562,12 +562,13 @@
 
       // 2. Direct MetaApi Cloud Live Stream Real MT5 Candles Fallback
       try {
-        const startTime = new Date(Date.now() - 7 * 86400000).toISOString();
-        const cloudUrl = 'https://mt-market-data-client-api-v1.london-a.agiliumtrade.ai/users/current/accounts/' + METAAPI_ACC_ID + '/historical-market-data/symbols/XAUUSDm/timeframes/' + tf + '/candles?startTime=' + startTime + '&limit=100';
+        const startTime = new Date(Date.now() - 5 * 86400000).toISOString();
+        const cloudUrl = 'https://mt-market-data-client-api-v1.london-a.agiliumtrade.ai/users/current/accounts/' + METAAPI_ACC_ID + '/historical-market-data/symbols/XAUUSDm/timeframes/' + tf + '/candles?startTime=' + startTime + '&limit=1000';
         const cRes = await fetch(cloudUrl, { headers: { 'auth-token': METAAPI_TOKEN } });
         const cData = await cRes.json();
         if (Array.isArray(cData) && cData.length > 0) {
-          liveCandles = cData.map(c => ({
+          const slice = cData.slice(-150);
+          liveCandles = slice.map(c => ({
             time: Math.floor(new Date(c.time).getTime() / 1000),
             open: Number(c.open),
             high: Number(c.high),
