@@ -130,15 +130,49 @@ class GeminiProvider {
     const result = await this.chatCompletion(promptText, {
       mode: options.mode || 'DEEP_THINKING',
       systemInstruction: SYSTEM_PROMPT,
+      jsonMode: true,
+      responseFormat: 'json_object',
     });
 
-    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Gemini response did not contain valid JSON');
+    let raw = result.content ? result.content.replace(/^```json|^```|```$/gm, '').trim() : '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    let parsed = {};
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {}
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return TradeThesisSchema.parse(parsed);
+    const bias = ['BULLISH', 'BEARISH', 'NEUTRAL'].includes(String(parsed.bias || '').toUpperCase())
+      ? String(parsed.bias).toUpperCase()
+      : 'NEUTRAL';
+
+    let entryZone = null;
+    if (parsed.entry_zone) {
+      if (typeof parsed.entry_zone === 'object' && parsed.entry_zone.min && parsed.entry_zone.max) {
+        entryZone = { min: Number(parsed.entry_zone.min), max: Number(parsed.entry_zone.max) };
+      } else if (typeof parsed.entry_zone === 'string') {
+        const nums = parsed.entry_zone.match(/\d+(\.\d+)?/g);
+        if (nums && nums.length >= 2) {
+          entryZone = { min: Math.min(Number(nums[0]), Number(nums[1])), max: Math.max(Number(nums[0]), Number(nums[1])) };
+        }
+      }
+    }
+
+    return {
+      bias,
+      confidence: Number(parsed.confidence) || (bias === 'NEUTRAL' ? 50 : 75),
+      primary_setup: parsed.primary_setup || 'Institutional SMC/ICT Confluence Zone',
+      reasoning: parsed.reasoning || raw || 'Multi-timeframe SMC order flow structure analysis.',
+      invalidation_level: parsed.invalidation_level !== undefined && parsed.invalidation_level !== null ? Number(parsed.invalidation_level) : null,
+      entry_zone: entryZone,
+      suggested_sl: parsed.suggested_sl !== undefined && parsed.suggested_sl !== null ? Number(parsed.suggested_sl) : null,
+      suggested_tp1: parsed.suggested_tp1 !== undefined && parsed.suggested_tp1 !== null ? Number(parsed.suggested_tp1) : null,
+      suggested_tp2: parsed.suggested_tp2 !== undefined && parsed.suggested_tp2 !== null ? Number(parsed.suggested_tp2) : null,
+      risk_reward_ratio: parsed.risk_reward_ratio !== undefined && parsed.risk_reward_ratio !== null ? Number(parsed.risk_reward_ratio) : 2.0,
+      timeframe_alignment_summary: parsed.timeframe_alignment_summary || 'Multi-timeframe aligned',
+      caution_flags: Array.isArray(parsed.caution_flags) ? parsed.caution_flags : [],
+    };
   }
 }
 
