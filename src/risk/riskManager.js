@@ -12,6 +12,9 @@ class RiskManager {
     this.maxLotSize = config.risk.maxLotSize;
     this.minLotSize = config.risk.minLotSize;
     this.mandatoryStopLoss = config.risk.mandatoryStopLoss;
+    // FIX #20: Max SL distance in price points (for Gold XAU/USD)
+    // Prevents LLM hallucinations from setting absurdly wide SL (e.g., $50+ away)
+    this.maxSLDistance = Number(process.env.MAX_SL_DISTANCE) || 50.0; // Default: 50 points ($50 for Gold)
   }
 
   // Calculate lot size based on account balance and SL distance
@@ -56,6 +59,14 @@ class RiskManager {
     }
     if (type === 'SELL' && sl && sl <= entryPrice) {
       reasons.push(`Trade rejected: Sell order SL (${sl}) cannot be below entry (${entryPrice}).`);
+    }
+
+    // 2b. FIX #20: Max SL Distance Guard — prevents hallucinated bad SL values
+    if (sl && entryPrice) {
+      const slDistance = Math.abs(entryPrice - sl);
+      if (slDistance > this.maxSLDistance) {
+        reasons.push(`Trade rejected: Stop Loss distance (${slDistance.toFixed(1)} points) exceeds maximum allowed (${this.maxSLDistance} points). Likely LLM hallucination.`);
+      }
     }
 
     // 3. Max Lot Size Check

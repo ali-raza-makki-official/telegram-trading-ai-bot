@@ -4,7 +4,6 @@ const smartPriceTrigger = require('../../orchestrator/smartPriceTriggerEngine');
 const marketFeed = require('../../market-data/marketFeed');
 const config = require('../../config');
 const logger = require('../../utils/logger');
-const { generateRealisticGoldCandles } = require('../../market-data/mockDataGenerator');
 const { calculateEMA, calculateRSI, calculateBollingerBands, calculateATR } = require('../../indicators');
 
 /**
@@ -29,17 +28,12 @@ class MultiTimeframeScanner {
 
     for (const tf of timeframes) {
       let candles = candleManager.getCandles(symbol, tf);
+
+      // Skip timeframes without enough real data — no mock fallback
       if (!candles || candles.length < 15) {
-        const mockHistory = generateRealisticGoldCandles({
-          count: 100,
-          timeframe: tf,
-          basePrice: currentPrice || 4520.0,
-          trend: 'BULLISH',
-        });
-        candleManager.setCandles(symbol, tf, mockHistory);
-        candles = candleManager.getCandles(symbol, tf);
+        logger.warn({ timeframe: tf, count: candles?.length || 0 }, 'Skipping timeframe — insufficient real candle data');
+        continue;
       }
-      if (!candles || candles.length < 15) continue;
 
       const smc = analyzeSMC(candles);
       if (!smc) continue;

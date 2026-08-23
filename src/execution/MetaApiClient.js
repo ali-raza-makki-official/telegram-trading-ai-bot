@@ -1,5 +1,6 @@
 const EventEmitter = require('events');
 const config = require('../config');
+const { SettingsRepo } = require('../database');
 const logger = require('../utils/logger');
 
 class MetaApiClient extends EventEmitter {
@@ -78,13 +79,27 @@ class MetaApiClient extends EventEmitter {
       this.brokerSymbols = await this.rpcConnection.getSymbols();
       this.resolvedSymbol = this.resolveSymbol(config.system.primarySymbol);
 
-      // FIX #4: Record session start balance for dailyPnl calculation
+      // FIX #4 + FIX #19: Record session start balance for dailyPnl calculation
+      // Persist to DB so dailyPnl survives bot restarts within the same day
       try {
-        const info = this.streamingConnection?.terminalState?.accountInformation
-          || await this.rpcConnection?.getAccountInformation();
-        if (info?.balance) {
-          this.sessionStartBalance = info.balance;
-          logger.info({ sessionStartBalance: this.sessionStartBalance }, 'Session start balance recorded for daily PnL tracking');
+        const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+        const savedDate = await SettingsRepo.get('metaapi_daily_pnl_date');
+        const savedBalance = await SettingsRepo.get('metaapi_session_start_balance');
+
+        if (savedDate === todayStr && savedBalance !== null && !isNaN(Number(savedBalance))) {
+          // Same day — restore the original session start balance
+          this.sessionStartBalance = Number(savedBalance);
+          logger.info({ sessionStartBalance: this.sessionStartBalance, savedDate }, 'Restored session start balance from database (same day)');
+        } else {
+          // New day or first run — record fresh start balance
+          const info = this.streamingConnection?.terminalState?.accountInformation
+            || await this.rpcConnection?.getAccountInformation();
+          if (info?.balance) {
+            this.sessionStartBalance = info.balance;
+            await SettingsRepo.set('metaapi_session_start_balance', info.balance);
+            await SettingsRepo.set('metaapi_daily_pnl_date', todayStr);
+            logger.info({ sessionStartBalance: this.sessionStartBalance }, 'Recorded fresh session start balance for daily PnL tracking');
+          }
         }
       } catch (_) {}
 

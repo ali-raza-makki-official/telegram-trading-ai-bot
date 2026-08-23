@@ -1,11 +1,13 @@
 const logger = require('../utils/logger');
+const { fetchEconomicCalendar } = require('./newsCalendarFetcher');
 
 /**
  * Economic High-Impact News Blackout Engine
  * Tracks Red-Folder USD/Gold economic events (CPI, NFP, FOMC, Fed Rate Decisions).
  * Auto-pauses trading 30 minutes before high-impact news and resumes 15 minutes after.
  *
- * FIX #2: Calendar now refreshes daily at midnight UTC so events never go stale.
+ * FIX #18: Calendar now uses REAL scheduled dates from BLS, Fed, and economic data releases
+ * instead of hardcoded weekly recurring events that miss the actual dates.
  */
 class NewsFilter {
   constructor() {
@@ -14,84 +16,19 @@ class NewsFilter {
     this.cachedEvents = [];
     this.lastFetched = 0;
     this.refreshTimer = null;
-    this.initSchedule();
     this.startDailyRefresh();
   }
 
-  // Define the recurring weekly events template
-  _getEventTemplates() {
-    return [
-      {
-        name: 'US Non-Farm Payrolls (NFP) & Unemployment Rate',
-        currency: 'USD',
-        impact: 'HIGH',
-        dayOfWeek: 5, // Friday
-        hour: 12,
-        minute: 30,
-      },
-      {
-        name: 'US CPI Inflation Print (MoM & YoY)',
-        currency: 'USD',
-        impact: 'HIGH',
-        dayOfWeek: 3, // Wednesday
-        hour: 12,
-        minute: 30,
-      },
-      {
-        name: 'FOMC Interest Rate Decision & Fed Press Conference',
-        currency: 'USD',
-        impact: 'HIGH',
-        dayOfWeek: 3, // Wednesday
-        hour: 18,
-        minute: 0,
-      },
-      {
-        name: 'US Retail Sales & Core PPI',
-        currency: 'USD',
-        impact: 'HIGH',
-        dayOfWeek: 4, // Thursday
-        hour: 12,
-        minute: 30,
-      },
-      {
-        name: 'US Initial Jobless Claims',
-        currency: 'USD',
-        impact: 'MEDIUM',
-        dayOfWeek: 4, // Thursday
-        hour: 12,
-        minute: 30,
-      },
-      {
-        name: 'Fed Chair Powell Speech / FOMC Minutes',
-        currency: 'USD',
-        impact: 'HIGH',
-        dayOfWeek: 3, // Wednesday
-        hour: 19,
-        minute: 0,
-      },
-    ];
-  }
-
-  // FIX #2: Recalculate all event times from current date
-  initSchedule() {
-    const templates = this._getEventTemplates();
-    this.cachedEvents = templates.map(t => ({
-      name: t.name,
-      currency: t.currency,
-      impact: t.impact,
-      time: this.getNextOccurrenceTime(t.dayOfWeek, t.hour, t.minute),
-    }));
-    this.lastFetched = Date.now();
-    logger.debug({ count: this.cachedEvents.length }, 'News calendar refreshed');
-  }
-
-  // FIX #2: Start daily refresh at midnight UTC to keep calendar current
+  // FIX #18: Start async fetch of real calendar, then refresh daily
   startDailyRefresh() {
-    // Refresh every 24 hours
+    // Initial fetch (async, non-blocking)
+    this._refreshCalendar();
+
+    // Refresh every 12 hours
     this.refreshTimer = setInterval(() => {
-      logger.info('Refreshing news event calendar (daily refresh)...');
-      this.initSchedule();
-    }, 24 * 60 * 60 * 1000);
+      logger.info('Refreshing economic calendar (scheduled refresh)...');
+      this._refreshCalendar();
+    }, 12 * 60 * 60 * 1000);
 
     // Also schedule a refresh at the next midnight UTC
     const now = new Date();
@@ -101,32 +38,31 @@ class NewsFilter {
     const msToMidnight = midnight.getTime() - now.getTime();
 
     setTimeout(() => {
-      logger.info('Midnight UTC: refreshing news event calendar...');
-      this.initSchedule();
+      logger.info('Midnight UTC: refreshing economic calendar...');
+      this._refreshCalendar();
     }, msToMidnight);
   }
 
-  getNextOccurrenceTime(targetDayOfWeek, targetHour, targetMinute) {
-    const now = new Date();
-    const result = new Date(now);
-    result.setUTCHours(targetHour, targetMinute, 0, 0);
-
-    const currentDay = now.getUTCDay();
-    let distance = (targetDayOfWeek + 7 - currentDay) % 7;
-    if (distance === 0 && now.getTime() > result.getTime()) {
-      distance = 7;
+  async _refreshCalendar() {
+    try {
+      const events = await fetchEconomicCalendar();
+      if (events && events.length > 0) {
+        this.cachedEvents = events;
+        this.lastFetched = Date.now();
+        logger.info({ count: events.length }, 'News calendar refreshed with real scheduled events');
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Failed refreshing economic calendar');
     }
-    result.setUTCDate(now.getUTCDate() + distance);
-    return result.getTime();
   }
 
   // Check if trading is currently in a news blackout window
-  // FIX #2: Also checks if cached events are stale (> 25 hours) and refreshes
+  // FIX #18: Uses real event timestamps instead of hardcoded weekly recurrence
   isNewsBlackoutActive(timestamp = Date.now()) {
     // Auto-refresh if calendar is older than 25 hours (safety net)
     if (timestamp - this.lastFetched > 25 * 60 * 60 * 1000) {
       logger.warn('News calendar stale (>25h) — force refreshing...');
-      this.initSchedule();
+      this._refreshCalendar();
     }
 
     for (const event of this.cachedEvents) {
@@ -156,7 +92,7 @@ class NewsFilter {
 
     return {
       isBlackout: false,
-      nextEvent: upcoming ? upcoming.name : 'None scheduled this week',
+      nextEvent: upcoming ? upcoming.name : 'None scheduled',
       minutesToNext: minsToNext,
     };
   }
@@ -185,4 +121,3 @@ class NewsFilter {
 }
 
 module.exports = new NewsFilter();
-

@@ -9,6 +9,7 @@ class MarketScheduler extends EventEmitter {
     super();
     this.jobs = [];
     this.lastSessionState = null;
+    this.lastKzTime = 0; // FIX #22: Initialize to 0 so first killzone event is not missed
   }
 
   start() {

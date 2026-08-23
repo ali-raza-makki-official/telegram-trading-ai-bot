@@ -8,7 +8,6 @@ const VolumeProfileEngine = require('../indicators/volumeProfile');
 const marketFeed = require('../../market-data/marketFeed');
 const config = require('../../config');
 const logger = require('../../utils/logger');
-const { generateRealisticGoldCandles } = require('../../market-data/mockDataGenerator');
 const smartPriceTrigger = require('../../orchestrator/smartPriceTriggerEngine');
 
 /**
@@ -31,25 +30,19 @@ class ComprehensiveAnalysisEngine {
 
     // Calculate Tick Volume Profile on 1H/15m Candles
     let volumeProfile = null;
-    const h1Candles = candleManager.getCandles(symbol, '1h') || generateRealisticGoldCandles({ count: 50, timeframe: '1h', basePrice: currentPrice });
+    const h1Candles = candleManager.getCandles(symbol, '1h');
     if (h1Candles && h1Candles.length >= 10) {
       volumeProfile = VolumeProfileEngine.calculateProfile(h1Candles, 1.0);
     }
 
     for (const tf of timeframes) {
       let candles = candleManager.getCandles(symbol, tf);
-      if (!candles || candles.length < 15) {
-        const mock = generateRealisticGoldCandles({
-          count: 100,
-          timeframe: tf,
-          basePrice: currentPrice,
-          trend: 'BULLISH',
-        });
-        candleManager.setCandles(symbol, tf, mock);
-        candles = candleManager.getCandles(symbol, tf);
-      }
 
-      if (!candles || candles.length < 15) continue;
+      // Skip timeframes without enough real data — no mock fallback
+      if (!candles || candles.length < 15) {
+        logger.warn({ timeframe: tf, count: candles?.length || 0 }, 'Skipping timeframe — insufficient real candle data');
+        continue;
+      }
 
       const smc = analyzeSMC(candles);
       const candlePatterns = scanCandlestickPatterns(candles);

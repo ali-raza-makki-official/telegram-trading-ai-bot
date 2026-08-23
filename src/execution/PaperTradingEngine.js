@@ -8,8 +8,31 @@ class PaperTradingEngine {
     this.balance = config.risk.accountStartingBalance;
     this.equity = config.risk.accountStartingBalance;
     this.spreadPips = 0.25; // 25 cents spread for Gold
+    // FIX #21: Slippage simulation — random slippage in points for realistic fills
+    // Gold typically has 0.5-2.0 points slippage during normal conditions, 5-15 during news
+    this.slippagePoints = 0.10; // Average slippage per fill (in price points)
     this.openPositions = new Map(); // id -> trade
     this.dailyPnl = 0;
+  }
+
+  // FIX #21: Simulate realistic slippage on order fills
+  _applySlippage(price, type, isEntry = true) {
+    // Slippage direction: BUY entries get worse (higher), SELL entries get worse (lower)
+    // BUY exits get better (lower), SELL exits get better (higher)
+    const baseSlippage = this.slippagePoints;
+    // Add random component: 0.5x to 2.0x of base slippage
+    const randomFactor = 0.5 + Math.random() * 1.5;
+    const slippage = Number((baseSlippage * randomFactor).toFixed(2));
+
+    if (type === 'BUY') {
+      return isEntry
+        ? Number((price + slippage).toFixed(2))  // BUY entry: price goes up (worse)
+        : Number((price - slippage).toFixed(2));  // BUY exit: price goes down (better)
+    } else {
+      return isEntry
+        ? Number((price - slippage).toFixed(2))  // SELL entry: price goes down (worse)
+        : Number((price + slippage).toFixed(2));  // SELL exit: price goes up (better)
+    }
   }
 
   async init() {
@@ -68,10 +91,11 @@ class PaperTradingEngine {
     const id = crypto.randomUUID();
     const ticket = `PAPER-${Date.now().toString().slice(-6)}`;
 
-    // Apply half spread to entry
-    const entryPrice = type === 'BUY'
+    // FIX #21: Apply spread + slippage to entry for realistic fill
+    const spreadAdjusted = type === 'BUY'
       ? Number((currentPrice + this.spreadPips / 2).toFixed(2))
       : Number((currentPrice - this.spreadPips / 2).toFixed(2));
+    const entryPrice = this._applySlippage(spreadAdjusted, type, true);
 
     const trade = {
       id,
@@ -100,9 +124,11 @@ class PaperTradingEngine {
     if (!pos) return null;
 
     const isBuy = pos.type === 'BUY';
-    const closePrice = isBuy
+    // FIX #21: Apply spread + slippage to close for realistic fill
+    const spreadAdjustedClose = isBuy
       ? Number((currentPrice - this.spreadPips / 2).toFixed(2))
       : Number((currentPrice + this.spreadPips / 2).toFixed(2));
+    const closePrice = this._applySlippage(spreadAdjustedClose, pos.type, false);
 
     // PnL in Dollars for Gold: lot * (diff) * 100
     const pointDiff = isBuy ? closePrice - pos.entryPrice : pos.entryPrice - closePrice;

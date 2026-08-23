@@ -1,6 +1,6 @@
 const EventEmitter = require('events');
 const candleManager = require('./candleManager');
-const { generateRealisticGoldCandles } = require('./mockDataGenerator');
+const { fetchCorrelatedData } = require('./correlatedDataFetcher');
 const config = require('../config');
 const logger = require('../utils/logger');
 
@@ -12,10 +12,10 @@ class MarketFeed extends EventEmitter {
     this.correlatedRefreshTimer = null;
     this.latestPrices = new Map();
     this.correlatedData = {
-      DXY: { price: 104.25, change: -0.15, bias: 'BEARISH' },
-      XAGUSD: { price: 31.85, change: +0.65, bias: 'BULLISH' },
-      US10Y: { price: 4.28, change: -0.04, bias: 'BEARISH' },
-      AUDUSD: { price: 0.6580, change: +0.22, bias: 'BULLISH' },
+      DXY: { price: 0, change: 0, changePercent: 0, bias: 'NEUTRAL', source: 'initializing' },
+      XAGUSD: { price: 0, change: 0, changePercent: 0, bias: 'NEUTRAL', source: 'initializing' },
+      US10Y: { price: 0, change: 0, changePercent: 0, bias: 'NEUTRAL', source: 'initializing' },
+      AUDUSD: { price: 0, change: 0, changePercent: 0, bias: 'NEUTRAL', source: 'initializing' },
     };
   }
 
@@ -36,8 +36,11 @@ class MarketFeed extends EventEmitter {
       logger.info(`Live mode (${config.system.executionMode}): Simulated tick generator DISABLED — using real broker ticks`);
     }
 
-    // FIX #16: Start periodic correlated data refresh (every 5 minutes)
+    // FIX #17: Start periodic correlated data refresh (every 5 minutes) — REAL DATA from Yahoo Finance
     this.startCorrelatedDataRefresh();
+
+    // Fetch real data immediately on startup
+    await this._refreshCorrelatedData();
 
     logger.info('Market Data Feed started successfully');
   }
@@ -47,32 +50,27 @@ class MarketFeed extends EventEmitter {
     const metaApiClient = require('../execution/MetaApiClient');
     
     for (const tf of config.system.timeframes) {
+      // Load previously saved candles from database
       await candleManager.loadFromDatabase(symbol, tf, 200);
       let existing = candleManager.getCandles(symbol, tf);
 
-      // Fetch real historical broker candles if MetaApi is connected
+      // Fetch real historical broker candles if MetaApi is connected and we need more data
       if (existing.length < 50 && metaApiClient.isConnected) {
         try {
           const realCandles = await metaApiClient.getHistoricalCandles(symbol, tf, 100);
           if (realCandles && realCandles.length > 0) {
             candleManager.setCandles(symbol, tf, realCandles);
-            logger.info({ symbol, timeframe: tf, count: realCandles.length }, 'Seeded real historical candles directly from MetaApi Exness MT5');
-            existing = realCandles;
+            logger.info({ symbol, timeframe: tf, count: realCandles.length }, 'Seeded real historical candles from MetaApi Exness MT5');
+            existing = candleManager.getCandles(symbol, tf);
           }
         } catch (err) {
-          logger.debug({ err: err.message, tf }, 'MetaApi candle fetch fallback');
+          logger.warn({ err: err.message, tf }, 'MetaApi candle fetch failed — no mock fallback');
         }
       }
 
-      if (existing.length < 50) {
-        const mockHistory = generateRealisticGoldCandles({
-          count: 100,
-          timeframe: tf,
-          basePrice: 4515.0,
-          trend: 'BULLISH',
-        });
-        candleManager.setCandles(symbol, tf, mockHistory);
-        logger.debug({ symbol, timeframe: tf, count: mockHistory.length }, 'Seeded initial candles');
+      // No simulated data fallback — if no real data, analysis will skip this timeframe
+      if (existing.length < 15) {
+        logger.warn({ symbol, timeframe: tf, count: existing.length }, 'Insufficient real candle data — analysis for this timeframe will be skipped');
       }
     }
   }
@@ -119,51 +117,63 @@ class MarketFeed extends EventEmitter {
     });
   }
 
-  // FIX #16: Refresh correlated data periodically to simulate market movement
+  // FIX #16 + FIX #17: Refresh correlated data periodically using REAL Yahoo Finance API
   startCorrelatedDataRefresh() {
-    this.correlatedRefreshTimer = setInterval(() => {
+    this.correlatedRefreshTimer = setInterval(async () => {
       if (!this.isRunning) return;
-      this._refreshCorrelatedData();
+      await this._refreshCorrelatedData();
     }, 5 * 60 * 1000); // Every 5 minutes
   }
 
-  _refreshCorrelatedData() {
-    // Apply small random drift to simulate price movement
-    const drift = () => Number(((Math.random() - 0.5) * 0.1).toFixed(4));
+  async _refreshCorrelatedData() {
+    try {
+      const realData = await fetchCorrelatedData();
 
-    const dxy = this.correlatedData.DXY;
-    const newDxyChange = Number((dxy.change + drift()).toFixed(2));
-    this.correlatedData.DXY = {
-      price: Number((dxy.price + drift()).toFixed(2)),
-      change: newDxyChange,
-      bias: newDxyChange < -0.05 ? 'BEARISH' : newDxyChange > 0.05 ? 'BULLISH' : 'NEUTRAL',
-    };
+      if (realData) {
+        // Merge real data — preserve shape for confluence scorer compatibility
+        this.correlatedData = {
+          DXY: {
+            price: realData.DXY?.price || this.correlatedData.DXY.price,
+            change: realData.DXY?.change || 0,
+            changePercent: realData.DXY?.changePercent || 0,
+            bias: realData.DXY?.bias || 'NEUTRAL',
+            source: realData.DXY?.source || 'yahoo_finance',
+          },
+          XAGUSD: {
+            price: realData.XAGUSD?.price || this.correlatedData.XAGUSD.price,
+            change: realData.XAGUSD?.change || 0,
+            changePercent: realData.XAGUSD?.changePercent || 0,
+            bias: realData.XAGUSD?.bias || 'NEUTRAL',
+            source: realData.XAGUSD?.source || 'yahoo_finance',
+          },
+          US10Y: {
+            price: realData.US10Y?.price || this.correlatedData.US10Y.price,
+            change: realData.US10Y?.change || 0,
+            changePercent: realData.US10Y?.changePercent || 0,
+            bias: realData.US10Y?.bias || 'NEUTRAL',
+            source: realData.US10Y?.source || 'yahoo_finance',
+          },
+          AUDUSD: {
+            price: realData.AUDUSD?.price || this.correlatedData.AUDUSD.price,
+            change: realData.AUDUSD?.change || 0,
+            changePercent: realData.AUDUSD?.changePercent || 0,
+            bias: realData.AUDUSD?.bias || 'NEUTRAL',
+            source: realData.AUDUSD?.source || 'yahoo_finance',
+          },
+        };
 
-    const xag = this.correlatedData.XAGUSD;
-    const newXagChange = Number((xag.change + drift()).toFixed(2));
-    this.correlatedData.XAGUSD = {
-      price: Number((xag.price + drift() * 2).toFixed(2)),
-      change: newXagChange,
-      bias: newXagChange > 0.05 ? 'BULLISH' : newXagChange < -0.05 ? 'BEARISH' : 'NEUTRAL',
-    };
-
-    const us10y = this.correlatedData.US10Y;
-    const newUs10yChange = Number((us10y.change + drift() * 0.5).toFixed(3));
-    this.correlatedData.US10Y = {
-      price: Number((us10y.price + drift() * 0.05).toFixed(3)),
-      change: newUs10yChange,
-      bias: newUs10yChange < -0.02 ? 'BEARISH' : newUs10yChange > 0.02 ? 'BULLISH' : 'NEUTRAL',
-    };
-
-    const audusd = this.correlatedData.AUDUSD;
-    const newAudChange = Number((audusd.change + drift() * 0.3).toFixed(3));
-    this.correlatedData.AUDUSD = {
-      price: Number((audusd.price + drift() * 0.003).toFixed(4)),
-      change: newAudChange,
-      bias: newAudChange > 0.05 ? 'BULLISH' : newAudChange < -0.05 ? 'BEARISH' : 'NEUTRAL',
-    };
-
-    logger.debug({ correlatedData: this.correlatedData }, 'Correlated market data refreshed');
+        logger.debug({
+          DXY: `${this.correlatedData.DXY.price} (${this.correlatedData.DXY.bias})`,
+          XAGUSD: `${this.correlatedData.XAGUSD.price} (${this.correlatedData.XAGUSD.bias})`,
+          US10Y: `${this.correlatedData.US10Y.price} (${this.correlatedData.US10Y.bias})`,
+          AUDUSD: `${this.correlatedData.AUDUSD.price} (${this.correlatedData.AUDUSD.bias})`,
+        }, 'Real correlated market data refreshed from Yahoo Finance');
+      } else {
+        logger.warn('Correlated data fetch returned null — keeping previous cached values');
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Failed refreshing correlated data — retaining previous values');
+    }
   }
 
   getLatestPrice(symbol = config.system.primarySymbol) {
