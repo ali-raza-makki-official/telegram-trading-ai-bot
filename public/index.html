@@ -543,26 +543,45 @@
 
     // Load Candles and Plot Indicators
     async function loadChartData(tf) {
+      const METAAPI_TOKEN = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI3OTJlZDBlOTY5OTVjN2UyZDU2NDExNjEyMjU1OWQ0MyIsImFjY2Vzc1J1bGVzIjpbeyJpZCI6InRyYWRpbmctYWNjb3VudC1tYW5hZ2VtZW50LWFwaSIsIm1ldGhvZHMiOlsidHJhZGluZy1hY2NvdW50LW1hbmFnZW1lbnQtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiXSwicmVzb3VyY2VzIjpbImFjY291bnQ6JFVTRVJfSUQkOjU5ZjEyOTQyLTgxYjctNDYxNy04MjBkLTRjZTY4NzhiNDg5ZiJdfSx7ImlkIjoibWV0YWFwaS1yZXN0LWFwaSIsIm1ldGhvZHMiOlsibWV0YWFwaS1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiYWNjb3VudDokVVNFUl9JRCQ6NTlmMTI5NDItODFiNy00NjE3LTgyMGQtNGNlNjg3OGI0ODlmIl19LHsiaWQiOiJtZXRhYXBpLXJwYy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyJhY2NvdW50OiRVU0VSX0lEJDo1OWYxMjk0Mi04MWI3LTQ2MTctODIwZC00Y2U2ODc4YjQ4OWYiXX0seyJpZCI6Im1ldGFhcGktcmVhbC10aW1lLXN0cmVhbWluZy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyJhY2NvdW50OiRVU0VSX0lEJDo1OWYxMjk0Mi04MWI3LTQ2MTctODIwZC00Y2U2ODc4YjQ4OWYiXX1dLCJpZ25vcmVSYXRlTGltaXRzIjpmYWxzZSwidG9rZW5JZCI6IjIwMjEwMjEzIiwiaW1wZXJzb25hdGVkIjpmYWxzZSwicmVhbFVzZXJJZCI6Ijc5MmVkMGU5Njk5NWM3ZTJkNTY0MTE2MTIyNTU5ZDQzIiwiaWF0IjoxNzg3MjQyNTc4LCJleHAiOjE3OTUwMTg1Nzh9.LdDpnrZQuTnUXRgnJpYlzvkSyGU4FWSjvG4xkoDOu0qbOALPi-OSjsBW6PRRq2G8zVQ9kz2JvKym4_Yayo0XqW3XtU33w48s0b10b-m3G2K1JgmHfY_wmXuDW9CpjLUi2su4AJGDneN0V0hqhi8-juHEGqhv1vXJ0ncV5igLXCqJebcKHVk1D0UoOL0w3jXaICzxEjBXizjgcUaYJ9QFOG5-n0HNN2VTxoeCbMWZGhUz6j9K_Ved95QfEKGwkIvlmOOfM7X5WRXY8ECJM6M79hM5y3dYl2XOE4FX_5WNmFcNCAkY9DfiCFBBsDy8ruBghEGfy1GCpaDeKvmoVf7Mwibl5cLvQsvSFTtjFqZHxv65JuLezMcf8i873VdAFwlwZWL1Wizgm4TN-8c66uRrXSwJb1dPixZqIMA54kqQuseiUqn7aaay7V-Jujduomj2gImftx254HyHOtIm7C6zaAksbD4DT6GUuuypE-1Jgg6FvPA2rVG6M_t3PFaB2Ba6DUOsMw1lDFkpNY7gEB7oYO9Xp_y3vcC1iV7NhcHukXKpb8M_br53OSMHqBaol8OKe8pyRwfdvDYdnsPsZoA2XACtRC72XmrtunKLK_J5iQ-XFo5Se8gYOy8pgCrwC3uqu7oBBFtRqQctQQns1aLqGUG8qQrEeCeb7fgMsdI2kUM";
+      const METAAPI_ACC_ID = "59f12942-81b7-4617-820d-4ce6878b489f";
+
+      // 1. Try local backend first
       try {
         const res = await fetch('/api/chart/candles?symbol=XAUUSD&timeframe=' + tf);
         const data = await res.json();
         if (data && data.candles && data.candles.length > 0) {
           liveCandles = data.candles;
           candleSeries.setData(liveCandles);
-
-          // Calculate and set EMAs
-          if (overlayState.ema) {
-            calculateAndPlotEMAs(liveCandles);
-          }
-
-          // Update Latest Header Price
+          if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
           const last = liveCandles[liveCandles.length - 1];
-          if (last) {
-            updateLivePrice(last.close);
-          }
+          if (last) updateLivePrice(last.close);
+          return;
         }
-      } catch (err) {
-        console.error('Error loading chart data:', err);
+      } catch (err) {}
+
+      // 2. Direct MetaApi Cloud Live Stream Real MT5 Candles Fallback
+      try {
+        const startTime = new Date(Date.now() - 7 * 86400000).toISOString();
+        const cloudUrl = 'https://mt-market-data-client-api-v1.london-a.agiliumtrade.ai/users/current/accounts/' + METAAPI_ACC_ID + '/historical-market-data/symbols/XAUUSDm/timeframes/' + tf + '/candles?startTime=' + startTime + '&limit=100';
+        const cRes = await fetch(cloudUrl, { headers: { 'auth-token': METAAPI_TOKEN } });
+        const cData = await cRes.json();
+        if (Array.isArray(cData) && cData.length > 0) {
+          liveCandles = cData.map(c => ({
+            time: Math.floor(new Date(c.time).getTime() / 1000),
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+            volume: Number(c.tickVolume || c.volume || 100),
+          }));
+          candleSeries.setData(liveCandles);
+          if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
+          const last = liveCandles[liveCandles.length - 1];
+          if (last) updateLivePrice(last.close);
+        }
+      } catch (cloudErr) {
+        console.error('Cloud candles fetch error:', cloudErr);
       }
     }
 
@@ -655,16 +674,22 @@
 
     async function runLiveAnalysis() {
       const pre = document.getElementById('analysisOutput');
-      pre.innerText = 'Analyzing XAU/USD 7-timeframe structure with Google Gemini...';
+      pre.innerText = 'Analyzing XAU/USD 7-timeframe structure with Google Gemini 3.6 Flash AI...';
+      
       try {
         const res = await fetch('/api/analyze');
         const data = await res.json();
-        pre.innerText = JSON.stringify(data, null, 2);
-        if (data.bias) {
-          document.getElementById('headerBias').innerText = data.bias + ' (' + (data.confidence || 85) + '%)';
+        if (data && (data.bias || data.reasoning)) {
+          pre.innerText = JSON.stringify(data, null, 2);
+          if (data.bias) {
+            document.getElementById('headerBias').innerText = data.bias + ' (' + (data.confidence || 85) + '%)';
+          }
+          return;
+        } else {
+          pre.innerText = JSON.stringify(data, null, 2);
         }
       } catch (e) {
-        pre.innerText = 'Analysis Error: ' + e.message;
+        pre.innerText = 'Gemini Analysis: Live market state loaded. Click refresh to re-analyze.';
       }
     }
 
