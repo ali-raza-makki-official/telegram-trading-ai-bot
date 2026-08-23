@@ -113,6 +113,20 @@ class CandleManager {
     return snapshot;
   }
 
+  // Update current live candle with incoming broker tick
+  updateOngoingCandle(symbol, timeframe, price) {
+    this.initSymbolTimeframe(symbol, timeframe);
+    const list = this.store.get(symbol)[timeframe];
+    if (list && list.length > 0) {
+      const last = list[list.length - 1];
+      const p = Number(price);
+      last.close = p;
+      if (p > last.high) last.high = p;
+      if (p < last.low) last.low = p;
+      last.volume = (last.volume || 0) + 1;
+    }
+  }
+
   // Set multiple candles at once
   setCandles(symbol, timeframe, candles) {
     this.initSymbolTimeframe(symbol, timeframe);
