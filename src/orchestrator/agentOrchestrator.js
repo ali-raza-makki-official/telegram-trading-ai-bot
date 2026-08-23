@@ -57,12 +57,31 @@ class AgentOrchestrator {
         marketFeed.latestPrices.set('XAUUSD', initialPrice.bid);
         marketFeed.latestPrices.set('XAUUSDm', initialPrice.bid);
       }
+
+      // Synchronize real Exness MT5 historical candles across all timeframes
+      for (const tf of config.system.timeframes) {
+        try {
+          const realCandles = await metaApiClient.getHistoricalCandles(this.primarySymbol, tf, 100);
+          if (realCandles && realCandles.length > 0) {
+            candleManager.setCandles(this.primarySymbol, tf, realCandles);
+            logger.info({ symbol: this.primarySymbol, timeframe: tf, count: realCandles.length }, 'Synchronized real Exness MT5 historical candles');
+          }
+        } catch (cErr) {
+          logger.warn({ err: cErr.message, tf }, 'Error fetching MT5 candles on startup');
+        }
+      }
+
       metaApiClient.on('tick', ({ symbol, price, bid }) => {
         const live = price || bid;
         marketFeed.latestPrices.set(symbol, live);
         marketFeed.latestPrices.set(this.primarySymbol, live);
         marketFeed.latestPrices.set('XAUUSD', live);
         marketFeed.latestPrices.set('XAUUSDm', live);
+
+        // Update active live bar in candleManager
+        for (const tf of config.system.timeframes) {
+          candleManager.updateOngoingCandle(this.primarySymbol, tf, live);
+        }
       });
     } else if (this.executionMode === 'mt5') {
       mt5Bridge.connect();

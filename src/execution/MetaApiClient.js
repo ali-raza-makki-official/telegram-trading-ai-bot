@@ -188,31 +188,29 @@ class MetaApiClient extends EventEmitter {
   }
 
   async getHistoricalCandles(symbol = config.system.primarySymbol, timeframe = '15m', limit = 100) {
-    if (!this.isConnected || !this.rpcConnection) return null;
+    if (!this.account) return null;
     try {
       const targetSymbol = this.resolveSymbol(symbol);
       const metaTf = timeframe.toLowerCase();
-      let rawCandles = [];
-      if (typeof this.rpcConnection.getCandles === 'function') {
-        rawCandles = await this.rpcConnection.getCandles(targetSymbol, metaTf, undefined, limit);
-      } else if (typeof this.rpcConnection.getHistoricalCandles === 'function') {
-        rawCandles = await this.rpcConnection.getHistoricalCandles(targetSymbol, metaTf, undefined, limit);
-      }
+      const tfMinutes = metaTf === '1m' ? 1 : metaTf === '5m' ? 5 : metaTf === '15m' ? 15 : metaTf === '30m' ? 30 : metaTf === '1h' ? 60 : metaTf === '4h' ? 240 : metaTf === '1d' ? 1440 : 10080;
+      const startTime = new Date(Date.now() - (limit * tfMinutes * 60 * 1000 * 3));
+      
+      const rawCandles = await this.account.getHistoricalCandles(targetSymbol, metaTf, startTime, limit);
 
       if (rawCandles && rawCandles.length > 0) {
         return rawCandles.map(c => ({
           timestamp: new Date(c.time).getTime(),
           time: new Date(c.time).toISOString(),
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-          volume: c.tickVolume || c.volume || 100,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+          volume: Number(c.tickVolume || c.volume || 100),
         }));
       }
       return null;
     } catch (err) {
-      logger.warn({ err: err.message, symbol, timeframe }, 'Could not fetch historical candles via MetaApi RPC');
+      logger.warn({ err: err.message, symbol, timeframe }, 'Failed fetching real historical candles from MetaApi account');
       return null;
     }
   }
