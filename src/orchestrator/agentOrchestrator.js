@@ -50,15 +50,17 @@ class AgentOrchestrator {
     if (this.executionMode === 'paper') {
       await paperTrading.init();
     } else if (this.executionMode === 'metaapi') {
-      await metaApiClient.connect();
-      const initialPrice = await metaApiClient.getLivePrice();
-      if (initialPrice) {
-        marketFeed.latestPrices.set(this.primarySymbol, initialPrice.bid);
-        marketFeed.latestPrices.set('XAUUSD', initialPrice.bid);
-        marketFeed.latestPrices.set('XAUUSDm', initialPrice.bid);
+      try {
+        await metaApiClient.connect();
+        const initialPrice = await metaApiClient.getLivePrice();
+        if (initialPrice) {
+          marketFeed.latestPrices.set(this.primarySymbol, initialPrice.bid);
+          marketFeed.latestPrices.set('XAUUSD', initialPrice.bid);
+          marketFeed.latestPrices.set('XAUUSDm', initialPrice.bid);
+        }
+      } catch (connErr) {
+        logger.warn({ err: connErr.message }, 'MetaApi initial connection timed out. Background auto-reconnect will continue while terminal is live.');
       }
-
-      // Candle seeding is handled by marketFeed.seedInitialCandles() — no need to fetch here
 
       metaApiClient.on('tick', ({ symbol, price, bid }) => {
         const live = price || bid;
