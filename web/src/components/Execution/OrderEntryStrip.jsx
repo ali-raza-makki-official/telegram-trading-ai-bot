@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Zap, AlertTriangle } from 'lucide-react';
+import { Zap, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -14,7 +14,6 @@ export default function OrderEntryStrip({
 }) {
   const [lotSize, setLotSize] = useState(0.01);
   const [loading, setLoading] = useState(false);
-  const [orderType, setOrderType] = useState('BUY');
 
   const handlePlaceOrder = async (side) => {
     setLoading(true);
@@ -41,36 +40,35 @@ export default function OrderEntryStrip({
   };
 
   return (
-    <div className="h-10 px-3 bg-[#11141B] border-b border-borderHairline flex items-center justify-between font-mono text-xs select-none gap-3 overflow-x-auto">
+    <div className="h-11 px-3 bg-bgPanel border-b border-borderHairline flex items-center justify-between font-mono text-xs select-none gap-3 overflow-x-auto">
 
-      {/* Buy/Sell Buttons */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      {/* TradingView-grade Buy/Sell Buttons */}
+      <div className="flex items-center gap-2 flex-shrink-0">
         <button
           onClick={() => handlePlaceOrder('BUY')}
           disabled={loading}
-          className="h-7 px-3 bg-up/15 hover:bg-up text-up hover:text-black border border-up/35 font-bold rounded flex items-center gap-1.5 transition shadow-sm disabled:opacity-50 text-[11px]"
+          className="h-8 px-4 bg-up hover:brightness-110 text-white font-bold rounded flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
         >
-          <Zap className="w-3 h-3" />
-          <span>BUY</span>
-          <span className="text-[9px] px-1 py-0.2 bg-black/40 text-up rounded border border-up/25">[B]</span>
+          <ArrowUpRight className="w-3.5 h-3.5" />
+          <span>BUY / LONG</span>
         </button>
 
         <button
           onClick={() => handlePlaceOrder('SELL')}
           disabled={loading}
-          className="h-7 px-3 bg-down/15 hover:bg-down text-down hover:text-white border border-down/35 font-bold rounded flex items-center gap-1.5 transition shadow-sm disabled:opacity-50 text-[11px]"
+          className="h-8 px-4 bg-down hover:brightness-110 text-white font-bold rounded flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
         >
-          <Zap className="w-3 h-3" />
-          <span>SELL</span>
-          <span className="text-[9px] px-1 py-0.2 bg-black/40 text-down rounded border border-down/25">[S]</span>
+          <ArrowDownRight className="w-3.5 h-3.5" />
+          <span>SELL / SHORT</span>
         </button>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-2 text-[11px] flex-shrink-0">
+      {/* Execution Controls (Lots, SL, TP) */}
+      <div className="flex items-center gap-2 text-[11px] flex-shrink-0 tabular-nums">
+        
         {/* Lot Size */}
-        <div className="flex items-center gap-1 bg-[#0E1117] border border-white/10 rounded px-2 h-7">
-          <span className="text-textMuted text-[10px]">LOTS:</span>
+        <div className="flex items-center gap-1 bg-bgElevated border border-borderHairline rounded px-2 h-8">
+          <span className="text-textMuted text-[10px] font-bold">LOTS:</span>
           <input
             type="number"
             step="0.01"
@@ -83,7 +81,7 @@ export default function OrderEntryStrip({
           <select
             value={lotSize}
             onChange={(e) => setLotSize(Number(e.target.value))}
-            className="bg-transparent text-textMuted text-[10px] focus:outline-none cursor-pointer border-l border-white/10 pl-1"
+            className="bg-transparent text-textMuted text-[10px] focus:outline-none cursor-pointer border-l border-borderHairline pl-1"
           >
             <option value={0.01}>0.01</option>
             <option value={0.05}>0.05</option>
@@ -94,7 +92,7 @@ export default function OrderEntryStrip({
         </div>
 
         {/* SL */}
-        <div className="flex items-center gap-1 bg-[#0E1117] border border-white/10 rounded px-2 h-7">
+        <div className="flex items-center gap-1 bg-bgElevated border border-borderHairline rounded px-2 h-8">
           <span className="text-down text-[10px] font-bold">SL:</span>
           <input
             type="number"
@@ -102,13 +100,13 @@ export default function OrderEntryStrip({
             max="200"
             value={slPips}
             onChange={(e) => onSlPipsChange && onSlPipsChange(Number(e.target.value))}
-            className="w-8 bg-transparent text-textPrimary text-center font-mono font-bold focus:outline-none"
+            className="w-9 bg-transparent text-textPrimary text-center font-mono font-bold focus:outline-none"
           />
-          <span className="text-textMuted text-[9px]">p</span>
+          <span className="text-textMuted text-[9px]">pips</span>
         </div>
 
         {/* TP */}
-        <div className="flex items-center gap-1 bg-[#0E1117] border border-white/10 rounded px-2 h-7">
+        <div className="flex items-center gap-1 bg-bgElevated border border-borderHairline rounded px-2 h-8">
           <span className="text-up text-[10px] font-bold">TP:</span>
           <input
             type="number"
@@ -116,16 +114,16 @@ export default function OrderEntryStrip({
             max="500"
             value={tpPips}
             onChange={(e) => onTpPipsChange && onTpPipsChange(Number(e.target.value))}
-            className="w-9 bg-transparent text-textPrimary text-center font-mono font-bold focus:outline-none"
+            className="w-10 bg-transparent text-textPrimary text-center font-mono font-bold focus:outline-none"
           />
-          <span className="text-textMuted text-[9px]">p</span>
+          <span className="text-textMuted text-[9px]">pips</span>
         </div>
 
-        {/* Loading indicator */}
+        {/* Loading spinner */}
         {loading && (
-          <div className="flex items-center gap-1 text-gold text-[10px]">
-            <div className="w-3 h-3 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
-            <span>Executing...</span>
+          <div className="flex items-center gap-1.5 text-gold text-[10px] ml-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-gold" />
+            <span>Transmitting Order...</span>
           </div>
         )}
       </div>

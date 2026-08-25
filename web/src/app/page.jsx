@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Activity, Bot, Layers, Settings, Bell, Play, Pause,
   LineChart, TrendingUp, TrendingDown, Shield, Zap,
-  BarChart3, RefreshCw, Send, ChevronDown,
+  BarChart3, RefreshCw, Send, ChevronDown, CheckCircle2,
+  FileCode2, Sparkles, SlidersHorizontal
 } from 'lucide-react';
 
 import TradingChart from '../components/Chart/TradingChart';
@@ -88,88 +89,105 @@ export default function TerminalWorkspace() {
   return (
     <div className="flex flex-col h-screen w-screen bg-bgBase text-textPrimary overflow-hidden font-sans select-none">
 
-      {/* TOP RIBBON BAR */}
-      <header className="h-[36px] px-4 bg-[#0D1016] border-b border-borderHairline flex items-center justify-between font-mono text-[11px] flex-shrink-0 z-30">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 font-bold tracking-wider text-white">
-            <span className="w-2 h-2 rounded-full bg-gold animate-pulse" />
-            <span className="text-gold">GOLD//AI</span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/15 text-gold font-semibold border border-gold/25">v2.0</span>
+      {/* TOP HEADER NAVIGATION RIBBON */}
+      <header className="h-[38px] px-3 bg-bgPanel border-b border-borderHairline flex items-center justify-between font-mono text-[11px] flex-shrink-0 z-30">
+        
+        {/* Left Branding & Workspace Switcher */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 font-bold tracking-wider text-textPrimary">
+            <span className="w-2 h-2 rounded-full bg-gold animate-live-dot" />
+            <span className="text-gold tracking-widest font-extrabold text-[12px]">GOLD//AI</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/15 text-gold font-bold border border-gold/30">v2.0</span>
           </div>
 
           {/* MAIN TAB SWITCHER */}
-          <div className="flex items-center gap-1 bg-[#141824] p-0.5 rounded border border-white/10 ml-2">
+          <div className="flex items-center gap-1 bg-bgBase p-0.5 rounded border border-borderHairline ml-2">
             <button
               onClick={() => setActiveTab('terminal')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition duration-150 ${
                 activeTab === 'terminal'
                   ? 'bg-gold text-black shadow-sm'
-                  : 'text-textMuted hover:text-white hover:bg-white/5'
+                  : 'text-textMuted hover:text-textPrimary hover:bg-bgElevated'
               }`}
             >
-              <LineChart className="w-3 h-3" />
+              <LineChart className="w-3.5 h-3.5" />
               <span>LIVE TERMINAL</span>
             </button>
 
             <button
               onClick={() => setActiveTab('strategy')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition duration-150 ${
                 activeTab === 'strategy'
                   ? 'bg-gold text-black shadow-sm'
-                  : 'text-textMuted hover:text-white hover:bg-white/5'
+                  : 'text-textMuted hover:text-textPrimary hover:bg-bgElevated'
               }`}
             >
-              <Layers className="w-3 h-3" />
-              <span>📋 STRATEGY DIRECTIVES</span>
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>STRATEGY DIRECTIVES</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-4 text-textMuted border-l border-borderHairline pl-4">
-            <span>BAL: <b className="text-textPrimary">${(account?.balance || 0).toLocaleString()}</b></span>
-            <span>EQ: <b className="text-textPrimary">${(account?.equity || 0).toLocaleString()}</b></span>
+          {/* Real-Time Tabular Account Balances */}
+          <div className="flex items-center gap-3 text-textMuted border-l border-borderHairline pl-3 text-[11px] tabular-nums">
+            <span>BAL: <b className="text-textPrimary">${(account?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></span>
+            <span>EQ: <b className="text-textPrimary">${(account?.equity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></span>
             <span>
               P&L:{' '}
-              <b className="text-up font-bold">
+              <b className={`font-bold ${status?.bias ? 'text-up' : 'text-textPrimary'}`}>
                 {status?.bias ? `+${status.bias}` : '$0.00'}
               </b>
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-[#141822] border border-white/10 rounded px-2 py-0.5">
+        {/* Right Status Tags & Trigger */}
+        <div className="flex items-center gap-2">
+          {/* Session Tag */}
+          <div className="flex items-center gap-1.5 bg-bgElevated border border-borderHairline rounded px-2 py-0.5 text-[10px]">
             <span className="text-textMuted">SESSION:</span>
-            <span className="text-gold font-bold">{status?.session || 'LOADING'}</span>
+            <span className="text-gold font-bold">{status?.session || 'LONDON'}</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#141822] border border-white/10 rounded px-2 py-0.5">
+
+          {/* Bias Tag */}
+          <div className="flex items-center gap-1.5 bg-bgElevated border border-borderHairline rounded px-2 py-0.5 text-[10px]">
             <span className="text-textMuted">BIAS:</span>
-            <span className={`font-bold ${status?.bias?.includes('BULL') ? 'text-up' : status?.bias?.includes('BEAR') ? 'text-down' : 'text-gold'}`}>
+            <span className={`font-bold flex items-center gap-1 ${
+              status?.bias?.includes('BULL') ? 'text-up' :
+              status?.bias?.includes('BEAR') ? 'text-down' : 'text-gold'
+            }`}>
+              {status?.bias?.includes('BULL') && <TrendingUp className="w-3 h-3 text-up" />}
+              {status?.bias?.includes('BEAR') && <TrendingDown className="w-3 h-3 text-down" />}
               {status?.bias || 'NEUTRAL'}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 bg-[#141822] border border-white/10 rounded px-2 py-0.5">
+
+          {/* Mode Tag */}
+          <div className="flex items-center gap-1.5 bg-bgElevated border border-borderHairline rounded px-2 py-0.5 text-[10px]">
             <span className="text-textMuted">MODE:</span>
-            <span className="text-accent font-bold">{status?.mode || 'SEMI'}</span>
+            <span className="text-accent font-bold">{status?.mode || 'AUTO'}</span>
           </div>
+
+          {/* Quick AI Trigger */}
           <button
             onClick={runAnalysis}
-            className="h-6 px-2.5 bg-gold/20 hover:bg-gold text-gold hover:text-black border border-gold/40 rounded font-bold transition flex items-center gap-1"
+            disabled={analysisLoading}
+            className="h-6 px-2.5 bg-gold/15 hover:bg-gold text-gold hover:text-black border border-gold/40 rounded font-bold transition duration-150 flex items-center gap-1 text-[10px] disabled:opacity-50"
           >
-            <Zap className="w-3 h-3" />
-            <span>ANALYZE</span>
+            <Zap className={`w-3 h-3 ${analysisLoading ? 'animate-spin' : ''}`} />
+            <span>{analysisLoading ? 'SCANNING...' : 'ANALYZE'}</span>
           </button>
         </div>
       </header>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN VIEWPORT */}
       {activeTab === 'strategy' ? (
         <StrategyPanel onStrategySaved={() => showToast('Master Strategy updated & active 24/7', 'success')} />
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden bg-bgBase">
 
-          {/* LEFT: Chart + Order Entry */}
+          {/* LEFT: Chart + Order Entry Strip */}
           <div className="flex-1 flex flex-col overflow-hidden border-r border-borderHairline">
-            {/* Chart */}
+            {/* Chart Container */}
             <div className="flex-1 overflow-hidden">
               <TradingChart
                 timeframe={selectedTimeframe}
@@ -192,15 +210,15 @@ export default function TerminalWorkspace() {
             </div>
           </div>
 
-          {/* RIGHT: Dashboard Panels */}
-          <div className="w-[380px] flex-shrink-0 flex flex-col overflow-hidden bg-bgPanel">
+          {/* RIGHT: Dashboard Panels (Account, AI Synthesis, Positions) */}
+          <div className="w-[390px] flex-shrink-0 flex flex-col overflow-hidden bg-bgPanel">
             {/* Account Summary */}
             <div className="flex-shrink-0 border-b border-borderHairline">
               <AccountPanel account={account} status={status} />
             </div>
 
             {/* AI Analysis */}
-            <div className="flex-shrink-0 border-b border-borderHairline" style={{ height: '35%' }}>
+            <div className="flex-shrink-0 border-b border-borderHairline" style={{ height: '36%' }}>
               <AIAnalysisPanel
                 analysis={analysis}
                 loading={analysisLoading}
@@ -208,7 +226,7 @@ export default function TerminalWorkspace() {
               />
             </div>
 
-            {/* Positions */}
+            {/* Positions Table */}
             <div className="flex-1 overflow-hidden">
               <PositionsTable positions={positions} onRefresh={fetchPositions} />
             </div>
@@ -216,13 +234,14 @@ export default function TerminalWorkspace() {
         </div>
       )}
 
-      {/* Toast */}
+      {/* Modern Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg shadow-2xl font-mono text-xs flex items-center gap-2 animate-in slide-in-from-bottom duration-150 ${
-          toast.type === 'success' ? 'bg-up/20 border border-up/40 text-up' :
-          toast.type === 'error' ? 'bg-down/20 border border-down/40 text-down' :
-          'bg-accent/20 border border-accent/40 text-accent'
+        <div className={`fixed bottom-6 right-6 z-50 px-3.5 py-2 rounded-lg shadow-2xl font-mono text-xs flex items-center gap-2 transition duration-200 border backdrop-blur-md ${
+          toast.type === 'success' ? 'bg-up/15 border-up/40 text-up' :
+          toast.type === 'error' ? 'bg-down/15 border-down/40 text-down' :
+          'bg-accent/15 border-accent/40 text-accent'
         }`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current" />
           <span>{toast.msg}</span>
         </div>
       )}

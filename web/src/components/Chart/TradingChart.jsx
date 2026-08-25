@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import {
   Eye, EyeOff, Play, Pause, RotateCcw, Maximize2,
-  Crosshair, TrendingUp, BarChart3,
+  Crosshair, TrendingUp, TrendingDown, BarChart3, Activity,
+  Sliders, Layers
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -24,7 +25,6 @@ export default function TradingChart({
   const emaSeriesRef = useRef(null);
   const slLineRef = useRef(null);
   const tpLineRef = useRef(null);
-  const bidLineRef = useRef(null);
 
   const [currentTick, setCurrentTick] = useState(null);
   const [tickDirection, setTickDirection] = useState(null);
@@ -33,54 +33,64 @@ export default function TradingChart({
   const [crosshairData, setCrosshairData] = useState(null);
   const prevPriceRef = useRef(null);
 
-  // Initialize chart
+  // Initialize TradingView Lightweight Chart
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0D1117' },
-        textColor: '#8E9AA8',
+        background: { type: ColorType.Solid, color: '#0a0e14' },
+        textColor: '#848e9c',
         fontSize: 11,
         fontFamily: "'JetBrains Mono', monospace",
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: '#171D28' },
-        horzLines: { color: '#171D28' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.04)' },
       },
       crosshair: {
         mode: 1,
-        vertLine: { color: '#3D8BFF', width: 1, style: 3, labelBackgroundColor: '#1F2430' },
-        horzLine: { color: '#3D8BFF', width: 1, style: 3, labelBackgroundColor: '#1F2430' },
+        vertLine: { color: 'rgba(41, 182, 246, 0.5)', width: 1, style: 3, labelBackgroundColor: '#161d27' },
+        horzLine: { color: 'rgba(41, 182, 246, 0.5)', width: 1, style: 3, labelBackgroundColor: '#161d27' },
       },
-      timeScale: { borderColor: '#232A38', timeVisible: true, secondsVisible: false },
-      rightPriceScale: { borderColor: '#232A38', scaleMargins: { top: 0.1, bottom: 0.15 } },
+      timeScale: {
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        scaleMargins: { top: 0.1, bottom: 0.15 },
+        alignLabels: true,
+      },
       handleScroll: { mouseWheel: true, pressedMouseMove: true },
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     });
     chartRef.current = chart;
 
+    // TradingView authentic Green/Red Candlestick styling
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#1FBF75',
-      downColor: '#F0433D',
-      borderUpColor: '#1FBF75',
-      borderDownColor: '#F0433D',
-      wickUpColor: '#1FBF75',
-      wickDownColor: '#F0433D',
+      upColor: '#089981',
+      downColor: '#f23645',
+      borderUpColor: '#089981',
+      borderDownColor: '#f23645',
+      wickUpColor: '#089981',
+      wickDownColor: '#f23645',
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
     });
     candleSeriesRef.current = candleSeries;
 
+    // EMA Series
     const emaSeries = chart.addLineSeries({
-      color: '#3D8BFF',
+      color: '#29b6f6',
       lineWidth: 1.5,
       title: 'EMA 20',
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
     });
     emaSeriesRef.current = emaSeries;
 
-    // Crosshair data
+    // Crosshair inspection
     chart.subscribeCrosshairMove((param) => {
       if (!param.point || !param.time) {
         setCrosshairData(null);
@@ -100,7 +110,7 @@ export default function TradingChart({
       }
     });
 
-    // Resize
+    // Responsive Resize Observer
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
@@ -109,7 +119,6 @@ export default function TradingChart({
     });
     resizeObserver.observe(chartContainerRef.current);
 
-    // Load candles
     loadCandles(timeframe);
 
     return () => {
@@ -130,7 +139,7 @@ export default function TradingChart({
         if (emaSeriesRef.current && sorted.length > 20) {
           const k = 2 / 21;
           let ema = sorted[0].close;
-          const emaData = sorted.map((c, i) => {
+          const emaData = sorted.map((c) => {
             ema = c.close * k + ema * (1 - k);
             return { time: c.time, value: Number(ema.toFixed(2)) };
           });
@@ -144,7 +153,7 @@ export default function TradingChart({
     }
   }, []);
 
-  // Live tick polling
+  // Real-time Tick Stream with Directional Flash
   useEffect(() => {
     const poll = async () => {
       try {
@@ -153,13 +162,13 @@ export default function TradingChart({
           const data = await res.json();
           if (data.goldPrice) {
             const price = Number(data.goldPrice);
-            if (prevPriceRef.current !== null) {
-              setTickDirection(price > prevPriceRef.current ? 'up' : price < prevPriceRef.current ? 'down' : null);
+            if (prevPriceRef.current !== null && price !== prevPriceRef.current) {
+              setTickDirection(price > prevPriceRef.current ? 'up' : 'down');
             }
             prevPriceRef.current = price;
             setCurrentTick({ bid: price - 0.15, ask: price + 0.15, last: price });
 
-            // Update last candle
+            // Update last candle real-time
             if (candleSeriesRef.current) {
               const last = candleSeriesRef.current.data?.[candleSeriesRef.current.data.length - 1];
               if (last) {
@@ -192,12 +201,20 @@ export default function TradingChart({
     if (slLineRef.current) candleSeriesRef.current.removePriceLine(slLineRef.current);
 
     tpLineRef.current = candleSeriesRef.current.createPriceLine({
-      price: tp, color: '#1FBF75', lineWidth: 1, lineStyle: 2,
-      axisLabelVisible: true, title: `TP (+${tpPips}p)`,
+      price: tp,
+      color: '#089981',
+      lineWidth: 1,
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: `TP (+${tpPips}p)`,
     });
     slLineRef.current = candleSeriesRef.current.createPriceLine({
-      price: sl, color: '#F0433D', lineWidth: 1, lineStyle: 2,
-      axisLabelVisible: true, title: `SL (-${slPips}p)`,
+      price: sl,
+      color: '#f23645',
+      lineWidth: 1,
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: `SL (-${slPips}p)`,
     });
 
     return () => {
@@ -209,90 +226,103 @@ export default function TradingChart({
   }, [currentTick, slPips, tpPips, showRiskBands]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-bgPanel border-b border-borderHairline relative overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-bgBase border-b border-borderHairline relative overflow-hidden">
 
       {/* Chart Toolbar */}
-      <div className="h-8 px-3 bg-[#0D1016] border-b border-borderHairline flex items-center justify-between font-mono text-[11px] flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-gold font-bold mr-2">XAUUSD</span>
-          {TIMEFRAMES.map((tf) => (
-            <button
-              key={tf}
-              onClick={() => onTimeframeChange(tf)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
-                timeframe === tf
-                  ? 'bg-gold text-black'
-                  : 'text-textMuted hover:text-textPrimary hover:bg-bgPanelAlt'
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
+      <div className="h-[34px] px-3 bg-bgPanel border-b border-borderHairline flex items-center justify-between font-mono text-[11px] flex-shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-gold font-bold text-xs tracking-wider mr-2">XAU/USD</span>
+          
+          <div className="flex items-center bg-bgBase rounded p-0.5 border border-borderHairline">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf}
+                onClick={() => onTimeframeChange(tf)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition duration-150 ${
+                  timeframe === tf
+                    ? 'bg-gold text-black shadow-sm'
+                    : 'text-textMuted hover:text-textPrimary hover:bg-bgElevated'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setShowEma(!showEma)}
-            className={`px-2 py-0.5 rounded text-[10px] border transition ${
-              showEma ? 'border-accent/40 bg-accent/15 text-accent' : 'border-white/10 text-textMuted'
+            className={`px-2 py-0.5 rounded text-[10px] border transition duration-150 flex items-center gap-1 ${
+              showEma
+                ? 'border-accent/40 bg-accent/15 text-accent font-bold'
+                : 'border-borderHairline text-textMuted hover:text-textPrimary'
             }`}
           >
-            EMA 20
+            <span>EMA 20</span>
           </button>
+          
           <button
             onClick={() => setShowRiskBands(!showRiskBands)}
-            className={`px-2 py-0.5 rounded text-[10px] border transition ${
-              showRiskBands ? 'border-gold/40 bg-gold/15 text-gold' : 'border-white/10 text-textMuted'
+            className={`px-2 py-0.5 rounded text-[10px] border transition duration-150 flex items-center gap-1 ${
+              showRiskBands
+                ? 'border-gold/40 bg-gold/15 text-gold font-bold'
+                : 'border-borderHairline text-textMuted hover:text-textPrimary'
             }`}
           >
-            Risk Bands
+            <span>SL/TP Bands</span>
           </button>
+
           <button
             onClick={() => loadCandles(timeframe)}
-            className="px-2 py-0.5 rounded text-[10px] border border-white/10 text-textMuted hover:text-textPrimary"
+            className="p-1 rounded border border-borderHairline text-textMuted hover:text-textPrimary hover:bg-bgElevated transition"
+            title="Refresh Candles"
           >
             <RotateCcw className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Live Price Strip */}
-      <div className="h-6 px-3 bg-[#0A0D14] border-b border-borderHairline flex items-center gap-4 font-mono text-[11px] flex-shrink-0">
+      {/* Real-time Ticker Ribbon with Directional Flashing */}
+      <div className="h-[28px] px-3 bg-bgElevated border-b border-borderHairline flex items-center gap-4 font-mono text-[11px] flex-shrink-0 tabular-nums">
         {currentTick && (
           <>
-            <span className={`font-bold text-sm ${
-              tickDirection === 'up' ? 'text-up flash-up' :
-              tickDirection === 'down' ? 'text-down flash-down' :
+            <div className={`px-1.5 py-0.5 rounded font-bold text-xs flex items-center gap-1 transition-colors duration-200 ${
+              tickDirection === 'up' ? 'flash-up text-up' :
+              tickDirection === 'down' ? 'flash-down text-down' :
               'text-textPrimary'
             }`}>
-              ${currentTick.last?.toFixed(2)}
+              {tickDirection === 'up' && <TrendingUp className="w-3.5 h-3.5 text-up" />}
+              {tickDirection === 'down' && <TrendingDown className="w-3.5 h-3.5 text-down" />}
+              <span>${currentTick.last?.toFixed(2)}</span>
+            </div>
+
+            <span className="text-textMuted text-[10px]">
+              BID: <span className="text-down font-bold">${currentTick.bid?.toFixed(2)}</span>
             </span>
             <span className="text-textMuted text-[10px]">
-              BID: <span className="text-rose-400 font-semibold">{currentTick.bid?.toFixed(2)}</span>
+              ASK: <span className="text-up font-bold">${currentTick.ask?.toFixed(2)}</span>
             </span>
-            <span className="text-textMuted text-[10px]">
-              ASK: <span className="text-emerald-400 font-semibold">{currentTick.ask?.toFixed(2)}</span>
-            </span>
-            <span className="text-[10px] text-accent">
-              SPD: {((currentTick.ask - currentTick.bid) * 10).toFixed(1)}p
+            <span className="text-[10px] text-accent font-semibold">
+              SPREAD: {((currentTick.ask - currentTick.bid) * 10).toFixed(1)}p
             </span>
           </>
         )}
 
-        {/* Crosshair OHLC */}
+        {/* Real-Time Crosshair OHLC Inspector */}
         {crosshairData && (
-          <div className="ml-auto flex items-center gap-3 text-[10px] text-textMuted">
-            <span>O: <b className="text-textPrimary">{crosshairData.open?.toFixed(2)}</b></span>
-            <span>H: <b className="text-up">{crosshairData.high?.toFixed(2)}</b></span>
-            <span>L: <b className="text-down">{crosshairData.low?.toFixed(2)}</b></span>
-            <span>C: <b className="text-textPrimary">{crosshairData.close?.toFixed(2)}</b></span>
-            {crosshairData.ema && <span>EMA: <b className="text-accent">{crosshairData.ema?.toFixed(2)}</b></span>}
+          <div className="ml-auto flex items-center gap-3 text-[10px] text-textMuted tabular-nums">
+            <span>O: <b className="text-textPrimary">${crosshairData.open?.toFixed(2)}</b></span>
+            <span>H: <b className="text-up">${crosshairData.high?.toFixed(2)}</b></span>
+            <span>L: <b className="text-down">${crosshairData.low?.toFixed(2)}</b></span>
+            <span>C: <b className="text-textPrimary">${crosshairData.close?.toFixed(2)}</b></span>
+            {crosshairData.ema && <span>EMA: <b className="text-accent">${crosshairData.ema?.toFixed(2)}</b></span>}
           </div>
         )}
       </div>
 
       {/* Chart Canvas */}
-      <div ref={chartContainerRef} className="flex-1 w-full min-h-[200px]" />
+      <div ref={chartContainerRef} className="flex-1 w-full min-h-[220px]" />
     </div>
   );
 }
