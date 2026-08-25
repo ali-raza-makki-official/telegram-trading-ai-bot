@@ -1039,6 +1039,88 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
+  // 8d. Get Custom Strategy Instructions API
+  if (pathname === '/api/strategy/instructions' && req.method === 'GET') {
+    const CustomStrategyStore = require('../strategies/customStrategyStore');
+    CustomStrategyStore.getStrategy().then(data => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    }).catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
+  // 8e. Save Custom Strategy Instructions API
+  if (pathname === '/api/strategy/instructions' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const updated = await CustomStrategyStore.setStrategy(payload.instructions, payload.enabled !== false);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...updated }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8f. Toggle Custom Strategy Active State API
+  if (pathname === '/api/strategy/toggle' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const updated = await CustomStrategyStore.toggleStrategy(payload.enabled);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...updated }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8g. Test Custom Strategy against Live Market State API
+  if (pathname === '/api/strategy/test' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const autonomousCore = require('../orchestrator/autonomousAgentCore');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const strategyData = await CustomStrategyStore.getStrategy();
+        const testInstructions = payload.instructions || strategyData.instructions;
+
+        const decision = await autonomousCore.thinkAndDecide({
+          userQuery: 'Evaluate live Exness MT5 market against the Master Strategy Directives checklist.',
+          chatId: null,
+          orchestrator,
+          triggerSource: 'STRATEGY_TEST_SIMULATION',
+          customStrategyText: testInstructions,
+          isExplicitAnalysis: true,
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, evaluation: decision }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 8d. Serve Main Next.js React Frontend (Static Build from web/out/)
   const fs = require('fs');
   const pathMod = require('path');

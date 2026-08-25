@@ -37,10 +37,14 @@ function formatAnalysisPrompt({
   pastMemories = [],
   accuracyStats = {},
   sessionInfo = {},
+  customStrategyInstructions = null,
 }) {
   return `
 Analyze the current market state for ${symbol} and generate a structured trade thesis:
 
+${customStrategyInstructions ? `--- 🎯 USER-DEFINED MASTER STRATEGY DIRECTIVES (STRICT COMPLIANCE REQUIRED) ---
+${customStrategyInstructions}
+` : ''}
 --- CURRENT MARKET SNAPSHOT ---
 Current Price: $${currentPrice.toFixed(2)}
 Timestamp UTC: ${sessionInfo.utcTime || new Date().toISOString()}

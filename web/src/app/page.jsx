@@ -11,11 +11,13 @@ import TradingChart from '../components/Chart/TradingChart';
 import AccountPanel from '../components/Dashboard/AccountPanel';
 import PositionsTable from '../components/Dashboard/PositionsTable';
 import AIAnalysisPanel from '../components/Dashboard/AIAnalysisPanel';
+import StrategyPanel from '../components/Dashboard/StrategyPanel';
 import OrderEntryStrip from '../components/Execution/OrderEntryStrip';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function TerminalWorkspace() {
+  const [activeTab, setActiveTab] = useState('terminal'); // 'terminal' | 'strategy'
   const [selectedTimeframe, setSelectedTimeframe] = useState('15m');
   const [account, setAccount] = useState(null);
   const [status, setStatus] = useState(null);
@@ -94,6 +96,34 @@ export default function TerminalWorkspace() {
             <span className="text-gold">GOLD//AI</span>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-gold/15 text-gold font-semibold border border-gold/25">v2.0</span>
           </div>
+
+          {/* MAIN TAB SWITCHER */}
+          <div className="flex items-center gap-1 bg-[#141824] p-0.5 rounded border border-white/10 ml-2">
+            <button
+              onClick={() => setActiveTab('terminal')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition ${
+                activeTab === 'terminal'
+                  ? 'bg-gold text-black shadow-sm'
+                  : 'text-textMuted hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <LineChart className="w-3 h-3" />
+              <span>LIVE TERMINAL</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('strategy')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[10px] font-bold transition ${
+                activeTab === 'strategy'
+                  ? 'bg-gold text-black shadow-sm'
+                  : 'text-textMuted hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span>📋 STRATEGY DIRECTIVES</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-4 text-textMuted border-l border-borderHairline pl-4">
             <span>BAL: <b className="text-textPrimary">${(account?.balance || 0).toLocaleString()}</b></span>
             <span>EQ: <b className="text-textPrimary">${(account?.equity || 0).toLocaleString()}</b></span>
@@ -131,56 +161,60 @@ export default function TerminalWorkspace() {
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* MAIN CONTENT AREA */}
+      {activeTab === 'strategy' ? (
+        <StrategyPanel onStrategySaved={() => showToast('Master Strategy updated & active 24/7', 'success')} />
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
 
-        {/* LEFT: Chart + Order Entry */}
-        <div className="flex-1 flex flex-col overflow-hidden border-r border-borderHairline">
-          {/* Chart */}
-          <div className="flex-1 overflow-hidden">
-            <TradingChart
-              timeframe={selectedTimeframe}
-              onTimeframeChange={setSelectedTimeframe}
-              slPips={slPips}
-              tpPips={tpPips}
-              status={status}
-            />
+          {/* LEFT: Chart + Order Entry */}
+          <div className="flex-1 flex flex-col overflow-hidden border-r border-borderHairline">
+            {/* Chart */}
+            <div className="flex-1 overflow-hidden">
+              <TradingChart
+                timeframe={selectedTimeframe}
+                onTimeframeChange={setSelectedTimeframe}
+                slPips={slPips}
+                tpPips={tpPips}
+                status={status}
+              />
+            </div>
+
+            {/* Order Entry Strip */}
+            <div className="flex-shrink-0">
+              <OrderEntryStrip
+                slPips={slPips}
+                tpPips={tpPips}
+                onSlPipsChange={setSlPips}
+                onTpPipsChange={setTpPips}
+                onOrderPlaced={handleOrderPlaced}
+              />
+            </div>
           </div>
 
-          {/* Order Entry Strip */}
-          <div className="flex-shrink-0">
-            <OrderEntryStrip
-              slPips={slPips}
-              tpPips={tpPips}
-              onSlPipsChange={setSlPips}
-              onTpPipsChange={setTpPips}
-              onOrderPlaced={handleOrderPlaced}
-            />
+          {/* RIGHT: Dashboard Panels */}
+          <div className="w-[380px] flex-shrink-0 flex flex-col overflow-hidden bg-bgPanel">
+            {/* Account Summary */}
+            <div className="flex-shrink-0 border-b border-borderHairline">
+              <AccountPanel account={account} status={status} />
+            </div>
+
+            {/* AI Analysis */}
+            <div className="flex-shrink-0 border-b border-borderHairline" style={{ height: '35%' }}>
+              <AIAnalysisPanel
+                analysis={analysis}
+                loading={analysisLoading}
+                onRefresh={runAnalysis}
+              />
+            </div>
+
+            {/* Positions */}
+            <div className="flex-1 overflow-hidden">
+              <PositionsTable positions={positions} onRefresh={fetchPositions} />
+            </div>
           </div>
         </div>
-
-        {/* RIGHT: Dashboard Panels */}
-        <div className="w-[380px] flex-shrink-0 flex flex-col overflow-hidden bg-bgPanel">
-          {/* Account Summary */}
-          <div className="flex-shrink-0 border-b border-borderHairline">
-            <AccountPanel account={account} status={status} />
-          </div>
-
-          {/* AI Analysis */}
-          <div className="flex-shrink-0 border-b border-borderHairline" style={{ height: '35%' }}>
-            <AIAnalysisPanel
-              analysis={analysis}
-              loading={analysisLoading}
-              onRefresh={runAnalysis}
-            />
-          </div>
-
-          {/* Positions */}
-          <div className="flex-1 overflow-hidden">
-            <PositionsTable positions={positions} onRefresh={fetchPositions} />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Toast */}
       {toast && (

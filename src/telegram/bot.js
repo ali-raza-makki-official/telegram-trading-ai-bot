@@ -472,6 +472,57 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
       text += '\n_Use Web Dashboard or adaptive tuning approvals to adjust parameters dynamically without redeploying code._';
       await ctx.reply(text, { parse_mode: 'Markdown' });
     });
+
+    // /instructions or /strategy — View Master Strategy Directives
+    const handleStrategyView = async (ctx) => {
+      const CustomStrategyStore = require('../strategies/customStrategyStore');
+      const strat = await CustomStrategyStore.getStrategy();
+
+      let msg = `📋 *Master Strategy Directives & Instructions*\n\n`;
+      msg += `• Status: *${strat.enabled ? '🟢 ACTIVE (Enforced 24/7)' : '🔴 PAUSED'}*\n`;
+      msg += `• Last Updated: \`${strat.updatedAt}\`\n\n`;
+      msg += `📝 *Active Strategy Rules:*\n`;
+      msg += `\`\`\`markdown\n${strat.instructions.substring(0, 1800)}\n\`\`\`\n`;
+      msg += `\n_💡 To update, send:_\n\`/setstrategy <your rules in English or Roman Urdu>\``;
+
+      const kb = new InlineKeyboard()
+        .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY')
+        .text('📊 15m Analysis', 'ACTION:ANALYZE_15m').row()
+        .text('💼 Account Status', 'ACTION:STATUS')
+        .text('🛡️ Open Positions', 'ACTION:POSITIONS');
+
+      await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+    };
+
+    this.bot.command('instructions', handleStrategyView);
+    this.bot.command('strategy', handleStrategyView);
+
+    // /setstrategy [your rules...] — Dynamically update strategy from Telegram
+    this.bot.command('setstrategy', async (ctx) => {
+      const rawText = ctx.message.text.replace(/^\/setstrategy\s*/i, '').trim();
+      if (!rawText) {
+        return ctx.reply(
+          `⚠️ *Please provide your strategy rules!*\n\n*Usage:*\n\`/setstrategy <Your rules here>\`\n\n*Example:*\n\`/setstrategy Sirf London open mein 15m FVG sweep pe BUY trade lo with 1:2 R:R. 15 pips SL rakho.\``,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      try {
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const updated = await CustomStrategyStore.setStrategy(rawText, true);
+
+        const kb = new InlineKeyboard()
+          .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY')
+          .text('📋 View Full Strategy', 'ACTION:VIEW_STRATEGY');
+
+        await ctx.reply(
+          `✅ *Master Strategy Directives Updated Successfully!*\n\n• Length: \`${updated.instructions.length} characters\`\n• Status: *🟢 Active & Enforced 24/7*\n\n_AI Gemini reasoner will now strictly evaluate every trade setup against your new rules._`,
+          { parse_mode: 'Markdown', reply_markup: kb }
+        );
+      } catch (err) {
+        await ctx.reply(`❌ Failed updating strategy: ${err.message}`);
+      }
+    });
   }
 
 
@@ -754,6 +805,56 @@ ${thesis.reasoning}
         } catch (err) {
           await ctx.reply(`❌ Master analysis failed: ${err.message}`);
         }
+        return;
+      }
+
+      // 5d. Test Master Strategy Directives on Live Market (ACTION:TEST_STRATEGY)
+      if (data === 'ACTION:TEST_STRATEGY') {
+        await ctx.answerCallbackQuery({ text: 'Evaluating Live Market against Master Strategy...' });
+        await ctx.reply('🔍 *Testing Master Strategy Directives against Live Exness MT5 Market...*', { parse_mode: 'Markdown' });
+        try {
+          const CustomStrategyStore = require('../strategies/customStrategyStore');
+          const strat = await CustomStrategyStore.getStrategy();
+          const autonomousCore = require('../orchestrator/autonomousAgentCore');
+
+          const decision = await autonomousCore.thinkAndDecide({
+            userQuery: 'Test live market against Master Strategy Directives and report rule compliance.',
+            chatId: ctx.chat?.id,
+            orchestrator: this.orchestrator,
+            triggerSource: 'USER_STRATEGY_TEST',
+            isExplicitAnalysis: true,
+          });
+
+          let replyMsg = `🎯 *Master Strategy Directives Evaluation:*\n\n${decision.reply}`;
+          const kb = new InlineKeyboard()
+            .text('📋 View Strategy', 'ACTION:VIEW_STRATEGY')
+            .text('📊 15m Analysis', 'ACTION:ANALYZE_15m').row()
+            .text('💼 Account Status', 'ACTION:STATUS');
+
+          await ctx.reply(replyMsg, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ Strategy evaluation failed: ${err.message}`);
+        }
+        return;
+      }
+
+      // 5e. View Strategy Directives (ACTION:VIEW_STRATEGY)
+      if (data === 'ACTION:VIEW_STRATEGY') {
+        await ctx.answerCallbackQuery();
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const strat = await CustomStrategyStore.getStrategy();
+
+        let msg = `📋 *Master Strategy Directives & Instructions*\n\n`;
+        msg += `• Status: *${strat.enabled ? '🟢 ACTIVE (Enforced 24/7)' : '🔴 PAUSED'}*\n`;
+        msg += `• Last Updated: \`${strat.updatedAt}\`\n\n`;
+        msg += `📝 *Active Strategy Rules:*\n`;
+        msg += `\`\`\`markdown\n${strat.instructions.substring(0, 1800)}\n\`\`\`\n`;
+
+        const kb = new InlineKeyboard()
+          .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY')
+          .text('📊 15m Analysis', 'ACTION:ANALYZE_15m');
+
+        await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
         return;
       }
 

@@ -58,6 +58,11 @@ class AutonomousAgentCore {
 
     const autonomyMode = orchestrator?.autonomyMode || 'semi';
 
+    // 2b. Retrieve Active Master Strategy Directives (User-Defined Mandate)
+    const CustomStrategyStore = require('../strategies/customStrategyStore');
+    const strategyData = await CustomStrategyStore.getStrategy();
+    const activeInstructions = strategyData.enabled ? strategyData.instructions : 'No custom rules active — follow standard institutional SMC.';
+
     // 3. Construct Tailored System & User Prompt based on Mode
     let systemPrompt = '';
     let userPromptText = '';
@@ -67,10 +72,13 @@ class AutonomousAgentCore {
       : 'No previous history recorded yet.';
 
     if (isDeepThinking) {
-      // Deep Institutional Strategic Reasoning
+      // Deep Institutional Strategic Reasoning with User Strategy Directives
       systemPrompt = `
 You are an Autonomous Gold (XAU/USD) Trading AI Agent & Fund Manager for Ali Raza in Telegram.
 MODE: DEEP INSTITUTIONAL THINKING & SETUP SYNTHESIS.
+
+### 🎯 USER-DEFINED MASTER STRATEGY DIRECTIVES (TOP PRIORITY MANDATE):
+${activeInstructions}
 
 LONG-TERM CONVERSATION HISTORY (From Day 1):
 ${historyText}
@@ -83,20 +91,26 @@ LIVE MARKET & BROKER SNAPSHOT:
 - Macro State (DXY, Silver SMT, Yields): ${JSON.stringify(situationContext.macroSnapshot)}
 - Autonomy Mode: "${autonomyMode.toUpperCase()}"
 
-MANDATE & INSTRUCTIONS:
-- You have CONTINUOUS, PERMANENT MEMORY of all past discussions with Ali Raza. Always reference past questions, preferences, and orders seamlessly.
-- Perform deep multi-timeframe reasoning, identify Order Blocks, FVGs, Liquidity Sweeps, and SMT Divergences.
-- Formulate a clear trade bias (BUY/SELL/HOLD) with exact Entry, SL, TP, and R:R.
-- If Autonomy Mode is "AUTO", you can set "action_type": "EXECUTE_TRADE".
-- If Autonomy Mode is "SEMI", set "action_type": "REQUEST_APPROVAL".
-- Reply in natural, senior institutional Roman Urdu / Urdu.
-- ALWAYS generate 2-4 DYNAMIC interactive buttons ("interactive_buttons") tailored specifically to your reply (e.g. ACTION:ZONES, ACTION:ANALYZE_15m, ACTION:STATUS, ACTION:POSITIONS).
+MANDATE & STRICT COMPLIANCE RULES:
+1. STRICT STRATEGY COMPLIANCE: The Master Strategy Directives defined above are your absolute law. Every trade setup MUST satisfy the rules, session windows, and confirmation checklist in the strategy.
+2. If the current market does NOT satisfy all criteria of the user's strategy, you MUST set "action": "HOLD" and clearly explain which specific rule was not met.
+3. Perform deep multi-timeframe reasoning, identify Order Blocks, FVGs, Liquidity Sweeps, and SMT Divergences.
+4. Formulate a clear trade bias (BUY/SELL/HOLD) with exact Entry, SL, TP, and R:R.
+5. If Autonomy Mode is "AUTO", you can set "action_type": "EXECUTE_TRADE".
+6. If Autonomy Mode is "SEMI", set "action_type": "REQUEST_APPROVAL".
+7. Reply in natural, senior institutional Roman Urdu / Urdu explaining the strategy alignment.
+8. ALWAYS generate 2-4 DYNAMIC interactive buttons ("interactive_buttons") tailored specifically to your reply (e.g. ACTION:ZONES, ACTION:ANALYZE_15m, ACTION:STATUS, ACTION:POSITIONS).
 
 Output format strictly JSON:
 {
-  "thought_process": "Deep institutional reasoning",
-  "reply": "Your clear, actionable analysis and response to Ali Raza",
+  "thought_process": "Deep institutional reasoning checking each rule of the Master Strategy Directives",
+  "reply": "Your clear, actionable analysis and response to Ali Raza in Roman Urdu",
   "action_type": "NONE" | "EXECUTE_TRADE" | "CLOSE_TRADE" | "REQUEST_APPROVAL",
+  "strategy_compliance": {
+    "status": "PASS" | "FAIL" | "WAITING",
+    "rules_checked": ["Rule 1: ...", "Rule 2: ..."],
+    "unmet_rules": []
+  },
   "trade_decision": {
     "action": "BUY" | "SELL" | "HOLD",
     "lot": number,
@@ -110,7 +124,7 @@ Output format strictly JSON:
     { "text": "🎯 Contextual Button Label", "action": "ACTION:ZONES" }
   ]
 }`;
-      userPromptText = userQuery || `Trigger: ${triggerSource}. Synthesize institutional market thesis.`;
+      userPromptText = userQuery || `Trigger: ${triggerSource}. Synthesize market thesis against Master Strategy Directives.`;
     } else {
       // Lightweight Fast Chat (Low Tokens, Instant Response)
       systemPrompt = `

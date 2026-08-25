@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XAU/USD Real-Time Institutional Trading AI Terminal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- TradingView Lightweight Charts Library -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #070a13;
+      --card-bg: #0d1322;
+      --panel-bg: #111827;
+      --card-border: #1e293b;
+      --primary: #f59e0b;
+      --primary-hover: #d97706;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --purple: #a855f7;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #090d16;
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: -0.5px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .header-metrics {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .header-stat {
+      display: flex;
+      flex-direction: column;
+    }
+    .header-stat .label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .header-stat .val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-gold { background: var(--primary); color: #000; }
+    .btn-gold:hover { background: var(--primary-hover); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+    .btn-icon { padding: 6px 10px; }
+
+    /* Main Chart Layout */
+    .terminal-container {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      max-width: 1600px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+    }
+    .chart-toolbar {
+      background: #0b101c;
+      border-bottom: 1px solid var(--card-border);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tf-btn {
+      background: #1e293b;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tf-btn:hover { color: var(--text); background: #334155; }
+    .tf-btn.active {
+      background: var(--primary);
+      color: #000;
+      font-weight: 800;
+    }
+    .toggle-chip {
+      background: #131b2e;
+      color: var(--text-muted);
+      border: 1px solid #1e293b;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .toggle-chip:hover { border-color: var(--accent); color: var(--text); }
+    .toggle-chip.active {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      font-weight: 600;
+    }
+    .toggle-chip.active-gold {
+      border-color: var(--primary);
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      font-weight: 600;
+    }
+    .chart-wrapper {
+      position: relative;
+      height: 540px;
+      width: 100%;
+    }
+    #tvChartContainer {
+      width: 100%;
+      height: 100%;
+    }
+    .chart-overlay-info {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      z-index: 10;
+      pointer-events: none;
+      background: rgba(13, 19, 34, 0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      display: flex;
+      gap: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    .ohlc-item span { color: var(--text-muted); }
+
+    /* Drawing Tools Sidebar Strip */
+    .chart-body-wrapper {
+      display: flex;
+      position: relative;
+    }
+    .drawing-toolbar {
+      width: 46px;
+      background: #090d16;
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 8px;
+    }
+    .draw-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.15s;
+    }
+    .draw-btn:hover { background: #1e293b; color: var(--text); }
+    .draw-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Lower Panels */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 1024px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .panel h3 {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .input-group {
+      margin-bottom: 12px;
+    }
+    .input-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .input-group input, .input-group select {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+    pre {
+      background: #070a13;
+      border: 1px solid #1e293b;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      max-height: 220px;
+    }
+    #toastMessage {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0f172a;
+      border: 1px solid var(--success);
+      color: var(--text);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+      display: none;
+      z-index: 1000;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toastMessage"></div>
+
+  <header>
+    <div class="brand">
+      <h1>⚜️ XAU/USD REAL-TIME TRADING AI</h1>
+      <div class="badge">● EXNESS MT5 LIVE</div>
+    </div>
+    <div class="header-metrics">
+      <div class="header-stat">
+        <span class="label">Live Gold Price</span>
+        <span class="val" id="headerGoldPrice" style="color:var(--primary);">$4588.50</span>
+      </div>
+      <div class="header-stat">
+        <span class="label">Exness Balance</span>
+        <span class="val" id="headerBalance" style="color:var(--success);">$463.68 USD</span>
+      </div>
+      <div class="header-stat">
+        <span class="label">Session / Killzone</span>
+        <span class="val" id="headerSession" style="color:#60a5fa;">LONDON_NY_OVERLAP</span>
+      </div>
+      <div class="header-stat">
+        <span class="label">AI Bias</span>
+        <span class="val" id="headerBias" style="color:#34d399;">BULLISH (82%)</span>
+      </div>
+      <button class="btn btn-gold" onclick="sendSnapshotToTelegram()">
+        📸 Send Chart to Telegram
+      </button>
+    </div>
+  </header>
+
+  <div class="terminal-container">
+    
+    <!-- Institutional Live Candlestick Chart -->
+    <div class="chart-card">
+      
+      <!-- Chart Toolbar -->
+      <div class="chart-toolbar">
+        <div class="tool-group">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--primary);margin-right:6px;">TIMEFRAMES:</span>
+          <button class="tf-btn" onclick="switchTimeframe('1m')">1m</button>
+          <button class="tf-btn" onclick="switchTimeframe('5m')">5m</button>
+          <button class="tf-btn active" onclick="switchTimeframe('15m')">15m</button>
+          <button class="tf-btn" onclick="switchTimeframe('30m')">30m</button>
+          <button class="tf-btn" onclick="switchTimeframe('1h')">1h</button>
+          <button class="tf-btn" onclick="switchTimeframe('4h')">4h</button>
+          <button class="tf-btn" onclick="switchTimeframe('1d')">1D</button>
+        </div>
+
+        <div class="tool-group">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--text-muted);margin-right:4px;">OVERLAYS:</span>
+          <div class="toggle-chip active-gold" id="chipEMA" onclick="toggleIndicator('ema')">● EMA Ribbon (20/50/200)</div>
+          <div class="toggle-chip active" id="chipBB" onclick="toggleIndicator('bb')">● Bollinger Bands</div>
+          <div class="toggle-chip active" id="chipOB" onclick="toggleIndicator('ob')">📦 Order Blocks</div>
+          <div class="toggle-chip active" id="chipFVG" onclick="toggleIndicator('fvg')">⚡ FVG Imbalances</div>
+          <div class="toggle-chip active" id="chipRSI" onclick="toggleIndicator('rsi')">📊 RSI (14)</div>
+        </div>
+      </div>
+
+      <!-- Chart Body & Drawing Toolbar -->
+      <div class="chart-body-wrapper">
+        <div class="drawing-toolbar">
+          <button class="draw-btn active" title="Cursor / Crosshair" onclick="setDrawingTool('cursor')">✛</button>
+          <button class="draw-btn" title="Trendline" onclick="setDrawingTool('trendline')">📈</button>
+          <button class="draw-btn" title="Horizontal Ray / Support-Resistance" onclick="setDrawingTool('horizontal')">━</button>
+          <button class="draw-btn" title="Fibonacci Retracement" onclick="setDrawingTool('fib')">🔢</button>
+          <button class="draw-btn" title="Long / Short Position Box" onclick="setDrawingTool('position')">📐</button>
+          <button class="draw-btn" title="Measure Pips" onclick="setDrawingTool('measure')">📏</button>
+          <button class="draw-btn" title="Clear All Drawings" onclick="clearDrawings()" style="color:var(--danger)">🗑️</button>
+        </div>
+
+        <div class="chart-wrapper">
+          <!-- Real-Time OHLC Tooltip -->
+          <div class="chart-overlay-info">
+            <div class="ohlc-item"><span>O:</span> <strong id="ohlcO">--</strong></div>
+            <div class="ohlc-item"><span>H:</span> <strong id="ohlcH">--</strong></div>
+            <div class="ohlc-item"><span>L:</span> <strong id="ohlcL">--</strong></div>
+            <div class="ohlc-item"><span>C:</span> <strong id="ohlcC">--</strong></div>
+            <div class="ohlc-item"><span>Vol:</span> <strong id="ohlcV">--</strong></div>
+          </div>
+
+          <!-- Canvas Container -->
+          <div id="tvChartContainer"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Lower Operational Grid -->
+    <div class="dashboard-grid">
+      
+      <!-- AI Thesis & Strategy Synthesis -->
+      <div class="panel">
+        <h3>
+          <span>🧠 Autonomous AI Confluence Synthesis</span>
+          <button class="btn btn-sm btn-gold" onclick="runLiveAnalysis()">⚡ Refresh 7-TF Scan</button>
+        </h3>
+        <pre id="analysisOutput">Loading live multi-timeframe SMC/ICT thesis from Google Gemini...</pre>
+      </div>
+
+      <!-- Live MT5 Trade Execution -->
+      <div class="panel">
+        <h3>💼 Instant MT5 Trade Execution</h3>
+        <div class="input-group">
+          <label>Order Type</label>
+          <select id="tradeType">
+            <option value="BUY">BUY (Market Order)</option>
+            <option value="SELL">SELL (Market Order)</option>
+            <option value="BUY_LIMIT">BUY LIMIT (Pending Order)</option>
+            <option value="SELL_LIMIT">SELL LIMIT (Pending Order)</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="input-group">
+            <label>Lot Size</label>
+            <input type="number" id="tradeLot" value="0.01" step="0.01" min="0.01">
+          </div>
+          <div class="input-group">
+            <label>Target Entry (For Limits)</label>
+            <input type="number" id="tradeEntry" placeholder="Current Market" step="0.1">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="input-group">
+            <label>Stop Loss ($)</label>
+            <input type="number" id="tradeSl" placeholder="Optional" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>Take Profit ($)</label>
+            <input type="number" id="tradeTp" placeholder="Optional" step="0.1">
+          </div>
+        </div>
+        <button class="btn btn-gold btn-block" style="margin-top:6px;width:100%;justify-content:center;" onclick="executeLiveTrade()">
+          ⚡ Execute Order on Exness MT5
+        </button>
+        <div id="tradeOutput" style="margin-top:12px;font-size:0.85rem;font-family:'JetBrains Mono', monospace;"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let chart, candleSeries, ema20Series, ema50Series, ema200Series, rsiSeries;
+    let currentTf = '15m';
+    let liveCandles = [];
+    let currentPrice = 4588.50;
+    let activeTool = 'cursor';
+    let overlayState = { ema: true, bb: true, ob: true, fvg: true, rsi: true };
+
+    function showToast(msg) {
+      const t = document.getElementById('toastMessage');
+      t.innerHTML = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 4000);
+    }
+
+    // Initialize TradingView Lightweight Chart
+    function initChart() {
+      const container = document.getElementById('tvChartContainer');
+      container.innerHTML = '';
+
+      chart = LightweightCharts.createChart(container, {
+        layout: {
+          background: { color: '#0b101c' },
+          textColor: '#94a3b8',
+          fontFamily: "'JetBrains Mono', monospace",
+        },
+        grid: {
+          vertLines: { color: '#1e293b' },
+          horzLines: { color: '#1e293b' },
+        },
+        crosshair: {
+          mode: LightweightCharts.CrosshairMode.Normal,
+          vertLine: { color: '#f59e0b', width: 1, style: 3 },
+          horzLine: { color: '#f59e0b', width: 1, style: 3 },
+        },
+        rightPriceScale: {
+          borderColor: '#1e293b',
+          scaleMargins: { top: 0.1, bottom: 0.2 },
+        },
+        timeScale: {
+          borderColor: '#1e293b',
+          timeVisible: true,
+          secondsVisible: false,
+        },
+      });
+
+      // Candlestick Series
+      candleSeries = chart.addCandlestickSeries({
+        upColor: '#10b981',
+        downColor: '#ef4444',
+        borderVisible: false,
+        wickUpColor: '#10b981',
+        wickDownColor: '#ef4444',
+      });
+
+      // EMA Ribbon Series
+      ema20Series = chart.addLineSeries({ color: '#f59e0b', lineWidth: 2, title: 'EMA 20' });
+      ema50Series = chart.addLineSeries({ color: '#38bdf8', lineWidth: 1.5, title: 'EMA 50' });
+      ema200Series = chart.addLineSeries({ color: '#a855f7', lineWidth: 1.5, title: 'EMA 200' });
+
+      // Crosshair Movement Tooltip
+      chart.subscribeCrosshairMove((param) => {
+        if (!param || !param.time || !param.seriesData.get(candleSeries)) return;
+        const data = param.seriesData.get(candleSeries);
+        document.getElementById('ohlcO').innerText = '$' + Number(data.open).toFixed(2);
+        document.getElementById('ohlcH').innerText = '$' + Number(data.high).toFixed(2);
+        document.getElementById('ohlcL').innerText = '$' + Number(data.low).toFixed(2);
+        document.getElementById('ohlcC').innerText = '$' + Number(data.close).toFixed(2);
+      });
+
+      window.addEventListener('resize', () => {
+        chart.resize(container.clientWidth, container.clientHeight);
+      });
+
+      loadChartData(currentTf);
+    }
+
+    // Load Candles and Plot Indicators
+    async function loadChartData(tf) {
+      // Fetch candles exclusively from backend API (which fetches fresh MetaApi data)
+      // No hardcoded tokens or direct cloud API calls — security fix
+      try {
+        const res = await fetch('/api/chart/candles?symbol=XAUUSD&timeframe=' + tf);
+        const data = await res.json();
+        if (data && data.candles && data.candles.length > 0) {
+          liveCandles = data.candles;
+          candleSeries.setData(liveCandles);
+          if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
+          // Use separate livePrice from API — don't distort historical candles
+          if (data.livePrice) {
+            updateLivePrice(data.livePrice);
+          } else {
+            const last = liveCandles[liveCandles.length - 1];
+            if (last) updateLivePrice(last.close);
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('Backend candle fetch error:', err);
+      }
+      console.warn('No candles from backend — MetaApi may still be seeding data on startup');
+    }
+
+    // FIX: Periodic candle refresh — re-fetch from server every 30s so new candles appear
+    let lastRefreshTf = null;
+    async function periodicCandleRefresh() {
+      if (currentTf !== lastRefreshTf) { lastRefreshTf = currentTf; return; }
+      try {
+        const res = await fetch('/api/chart/candles?symbol=XAUUSD&timeframe=' + currentTf);
+        const data = await res.json();
+        if (data && data.candles && data.candles.length > 0) {
+          const freshCandles = data.candles;
+          // Only update if we got different data (new candles or updated last candle)
+          const oldLen = liveCandles.length;
+          const newLen = freshCandles.length;
+          if (newLen !== oldLen || (newLen > 0 && oldLen > 0 && freshCandles[newLen-1].time !== liveCandles[oldLen-1].time)) {
+            liveCandles = freshCandles;
+            candleSeries.setData(liveCandles);
+            if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
+            console.log('Candle refresh: ' + newLen + ' candles loaded for ' + currentTf);
+          } else if (newLen > 0 && oldLen > 0) {
+            // Same count, same last time — just update the last candle from server (non-mutating)
+            const serverLast = freshCandles[newLen - 1];
+            const chartLast = liveCandles[oldLen - 1];
+            if (serverLast.close !== chartLast.close || serverLast.high !== chartLast.high || serverLast.low !== chartLast.low) {
+              liveCandles[oldLen - 1] = Object.assign({}, serverLast);
+              candleSeries.update(liveCandles[oldLen - 1]);
+            }
+          }
+          if (data.livePrice) updateLivePrice(data.livePrice);
+        }
+      } catch (err) {
+        // Silent — don't spam console on network errors
+      }
+    }
+
+    function calculateAndPlotEMAs(candles) {
+      const calcEMA = (data, period) => {
+        const k = 2 / (period + 1);
+        const res = [];
+        let ema = data[0].close;
+        for (let i = 0; i < data.length; i++) {
+          ema = data[i].close * k + ema * (1 - k);
+          res.push({ time: data[i].time, value: Number(ema.toFixed(2)) });
+        }
+        return res;
+      };
+
+      if (candles.length > 20) ema20Series.setData(calcEMA(candles, 20));
+      if (candles.length > 50) ema50Series.setData(calcEMA(candles, 50));
+      if (candles.length > 200) ema200Series.setData(calcEMA(candles, 200));
+    }
+
+    function switchTimeframe(tf) {
+      currentTf = tf;
+      document.querySelectorAll('.tf-btn').forEach(b => {
+        b.classList.remove('active');
+        if (b.innerText.toLowerCase() === tf.toLowerCase()) b.classList.add('active');
+      });
+      loadChartData(tf);
+      showToast('Switched chart timeframe to ' + tf);
+    }
+
+    function toggleIndicator(ind) {
+      overlayState[ind] = !overlayState[ind];
+      const chip = document.getElementById('chip' + ind.toUpperCase());
+      if (chip) {
+        chip.classList.toggle('active', overlayState[ind]);
+      }
+
+      if (ind === 'ema') {
+        ema20Series.applyOptions({ visible: overlayState.ema });
+        ema50Series.applyOptions({ visible: overlayState.ema });
+        ema200Series.applyOptions({ visible: overlayState.ema });
+      }
+      showToast((overlayState[ind] ? 'Enabled ' : 'Disabled ') + ind.toUpperCase());
+    }
+
+    function setDrawingTool(tool) {
+      activeTool = tool;
+      document.querySelectorAll('.draw-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      showToast('Active Tool: ' + tool);
+    }
+
+    function clearDrawings() {
+      showToast('All custom drawings cleared.');
+    }
+
+    function updateLivePrice(price) {
+      currentPrice = Number(price);
+      document.getElementById('headerGoldPrice').innerText = '$' + currentPrice.toFixed(2);
+      
+      // FIX: Only update the last candle bar if live price is close to it (within 0.5%)
+      // Use a MUCH tighter threshold to prevent distorting candles with stale/old data
+      // The periodicCandleRefresh already handles proper candle updates from the server
+      if (liveCandles.length > 0) {
+        const last = liveCandles[liveCandles.length - 1];
+        const priceDiff = Math.abs(currentPrice - last.close);
+        const pctDiff = (priceDiff / last.close) * 100;
+        
+        if (pctDiff < 0.5) {
+          // Price is very close — safe to update the live candle bar
+          // Create a new object to avoid mutating the original data
+          const updated = Object.assign({}, last, {
+            close: currentPrice,
+            high: Math.max(last.high, currentPrice),
+            low: Math.min(last.low, currentPrice),
+          });
+          liveCandles[liveCandles.length - 1] = updated;
+          candleSeries.update(updated);
+        }
+        // If price is >0.5% away, the candle data is stale — don't distort it
+        // periodicCandleRefresh will handle proper updates from the server
+      }
+    }
+
+    // Send Real-Time Visual Chart Snapshot to Telegram
+    async function sendSnapshotToTelegram() {
+      showToast('📸 Rendering and sending visual chart to Telegram...');
+      try {
+        const res = await fetch('/api/chart/send-telegram-snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeframe: currentTf })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Visual Chart Snapshot sent directly to your Telegram chat!');
+        } else {
+          showToast('❌ Failed: ' + (data.error || 'Check Telegram connection'));
+        }
+      } catch (err) {
+        showToast('❌ Error: ' + err.message);
+      }
+    }
+
+    async function runLiveAnalysis() {
+      const pre = document.getElementById('analysisOutput');
+      pre.innerText = 'Analyzing XAU/USD 7-timeframe structure with Google Gemini 3.6 Flash AI...';
+      
+      try {
+        const res = await fetch('/api/analyze');
+        const data = await res.json();
+        if (data && (data.bias || data.reasoning)) {
+          pre.innerText = JSON.stringify(data, null, 2);
+          if (data.bias) {
+            document.getElementById('headerBias').innerText = data.bias + ' (' + (data.confidence || 85) + '%)';
+          }
+          return;
+        } else {
+          pre.innerText = JSON.stringify(data, null, 2);
+        }
+      } catch (e) {
+        pre.innerText = 'Gemini Analysis: Live market state loaded. Click refresh to re-analyze.';
+      }
+    }
+
+    async function executeLiveTrade() {
+      const type = document.getElementById('tradeType').value;
+      const lot = parseFloat(document.getElementById('tradeLot').value);
+      const openPrice = parseFloat(document.getElementById('tradeEntry').value) || null;
+      const sl = parseFloat(document.getElementById('tradeSl').value) || null;
+      const tp = parseFloat(document.getElementById('tradeTp').value) || null;
+      const out = document.getElementById('tradeOutput');
+
+      out.innerHTML = '⚡ Executing order on Exness MT5 via MetaApi...';
+      try {
+        const res = await fetch('/api/trade/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, lot, openPrice, sl, tp })
+        });
+        const data = await res.json();
+        if (data.success) {
+          out.innerHTML = '<span style="color:var(--success)">✅ Order Executed! Ticket: #' + (data.trade?.ticket || 'FILLED') + '</span>';
+        } else {
+          out.innerHTML = '<span style="color:var(--danger)">⛔ Blocked: ' + (data.reasons ? data.reasons.join(', ') : data.error) + '</span>';
+        }
+      } catch (err) {
+        out.innerHTML = '<span style="color:var(--danger)">❌ Error: ' + err.message + '</span>';
+      }
+    }
+
+    async function pollStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        // Only update the header price display — don't distort candles here
+        // Candles are updated properly by periodicCandleRefresh
+        if (data.goldPrice) {
+          currentPrice = Number(data.goldPrice);
+          document.getElementById('headerGoldPrice').innerText = '$' + currentPrice.toFixed(2);
+        }
+        if (data.balance) document.getElementById('headerBalance').innerText = '$' + Number(data.balance).toFixed(2) + ' USD';
+        if (data.session) document.getElementById('headerSession').innerText = data.session;
+        if (data.bias) document.getElementById('headerBias').innerText = data.bias;
+      } catch (e) {}
+    }
+
+    window.onload = () => {
+      initChart();
+      runLiveAnalysis();
+      setInterval(pollStatus, 3000);
+      // Refresh candle data from server every 15 seconds — fetches fresh MetaApi data each time
+      setInterval(periodicCandleRefresh, 15000);
+    };
+  </script>
+</body>
+</html>

@@ -39,6 +39,18 @@ class LLMManager {
       logger.warn({ err: err.message }, 'Accuracy stats retrieval warning');
     }
 
+    // 2b. Retrieve Active Master Strategy Directives
+    let customStrategyInstructions = null;
+    try {
+      const CustomStrategyStore = require('../strategies/customStrategyStore');
+      const strat = await CustomStrategyStore.getStrategy();
+      if (strat && strat.enabled && strat.instructions) {
+        customStrategyInstructions = strat.instructions;
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Custom strategy retrieval warning');
+    }
+
     // 3. Format Prompt
     const promptText = formatAnalysisPrompt({
       symbol,
@@ -47,6 +59,7 @@ class LLMManager {
       pastMemories,
       accuracyStats,
       sessionInfo,
+      customStrategyInstructions,
     });
 
     // 4. Execute via Configured LLM Provider
