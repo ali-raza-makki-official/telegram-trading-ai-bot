@@ -1128,7 +1128,92 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8i. AI Playbook Compiler ("Load Instructions") API
+  // 8i. AI Playbook Compiler ("Preview & Compile") API
+  if (pathname === '/api/strategy/compile-preview' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const StrategyCompiler = require('../strategies/compiler/strategyCompiler');
+
+        const activeStrat = await CustomStrategyStore.getActiveStrategy();
+        const instructionsToCompile = (payload.instructions || activeStrat.instructions || '').trim();
+        const compiledResult = await StrategyCompiler.compile(instructionsToCompile);
+
+        if (compiledResult.needsClarification) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, needsClarification: true, clarification: compiledResult.clarification }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          previewSpec: compiledResult.spec,
+          rawInstructions: instructionsToCompile,
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8i2. Confirm and Activate Strategy (Saves to Version History) API
+  if (pathname === '/api/strategy/confirm-activate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const result = await CustomStrategyStore.confirmAndActivate(payload.id, {
+          instructions: payload.instructions,
+          compiledSpec: payload.compiledSpec,
+          executionMode: payload.executionMode || 'auto_execute',
+        });
+
+        // Initialize / Refresh Execution Engine
+        const { getOrCreateEngine } = require('../engine/executionEngine');
+        getOrCreateEngine(result.strategy, orchestrator);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...result }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8i3. Rollback Strategy Version API
+  if (pathname === '/api/strategy/rollback' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const rolledBackStrat = await CustomStrategyStore.rollbackVersion(payload.id, payload.version);
+
+        const { getOrCreateEngine } = require('../engine/executionEngine');
+        getOrCreateEngine(rolledBackStrat, orchestrator);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, strategy: rolledBackStrat }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8i. AI Playbook Compiler ("Load Instructions") API (Legacy compatibility)
   if (pathname === '/api/strategy/compile-playbook' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -1136,9 +1221,30 @@ function handleDashboardRequest(req, res, orchestrator) {
       try {
         const payload = JSON.parse(body || '{}');
         const CustomStrategyStore = require('../strategies/customStrategyStore');
-        const compiledResult = await CustomStrategyStore.compilePlaybook(payload.id, payload.instructions);
+        const StrategyCompiler = require('../strategies/compiler/strategyCompiler');
+
+        const activeStrat = await CustomStrategyStore.getActiveStrategy();
+        const instructionsToCompile = (payload.instructions || activeStrat.instructions || '').trim();
+        const compiledResult = await StrategyCompiler.compile(instructionsToCompile);
+
+        if (compiledResult.needsClarification) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, needsClarification: true, clarification: compiledResult.clarification }));
+          return;
+        }
+
+        const updated = await CustomStrategyStore.updateStrategy(payload.id || activeStrat.id, {
+          title: compiledResult.spec.title,
+          instructions: instructionsToCompile,
+          compiledPlaybook: compiledResult.spec,
+        });
+
+        // Initialize / Refresh Execution Engine
+        const { getOrCreateEngine } = require('../engine/executionEngine');
+        getOrCreateEngine(updated, orchestrator);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, ...compiledResult }));
+        res.end(JSON.stringify({ success: true, strategy: updated, compiledPlaybook: compiledResult.spec }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: err.message }));

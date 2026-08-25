@@ -58,6 +58,20 @@ class CandleManager {
       }
       // Save to database
       await CandleRepo.saveMany([{ ...candle, symbol, timeframe }]);
+
+      // Notify Deterministic Execution Engine on Candle Close
+      try {
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const { getOrCreateEngine } = require('../engine/executionEngine');
+        CustomStrategyStore.getActiveStrategy().then(activeStrat => {
+          if (activeStrat && activeStrat.enabled && activeStrat.compiledPlaybook) {
+            const engine = getOrCreateEngine(activeStrat);
+            engine.onCandleClose(timeframe, list);
+          }
+        }).catch(() => {});
+      } catch (e) {
+        // Non-blocking trigger error
+      }
     }
   }
 

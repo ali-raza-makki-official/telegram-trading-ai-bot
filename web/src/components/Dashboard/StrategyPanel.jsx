@@ -1,23 +1,58 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  FileText, Save, Sparkles, Sliders, ToggleLeft, ToggleRight,
+  FileText, Save, Sparkles, ToggleLeft, ToggleRight,
   Check, Clock, Shield, RefreshCw, Plus, Trash2, BookOpen,
   Cpu, CheckCircle2, AlertTriangle, Eye, Layers, ChevronRight,
   Activity, Zap, Compass, BarChart2, Play, Award, CheckCircle,
-  XCircle, HelpCircle, ArrowUpRight, TrendingUp, Filter
+  XCircle, Code2, Terminal, Flame, TrendingUp, History, RotateCcw,
+  HelpCircle, ChevronDown, ChevronUp, Copy, ShieldAlert, Sparkle
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
-const RULE_INJECTORS = [
-  { label: '🏛️ Silver SMT Divergence', text: '\n- SMT Filter: Check inverse correlation with Silver (XAG/USD) before confirming entry.' },
-  { label: '🎯 London Killzone Sweep', text: '\n- Killzone: Wait for 07:00 UTC London Open sweep of Asian session High/Low.' },
-  { label: '🛡️ Break-Even at 1.0R', text: '\n- Trade Management: Automatically move Stop Loss to Break-Even as soon as 1.0R profit is reached.' },
-  { label: '⚡ 50% Partials at 1.5R', text: '\n- Partials: Close 50% of position size at 1.5R and let remaining 50% run to final target.' },
-  { label: '🚫 15m High-Impact News Blackout', text: '\n- News Guard: Do not enter new trades 15 minutes before or after USD CPI, NFP, or FOMC.' },
-  { label: '🕯️ Candlestick Reversal Confirmation', text: '\n- Candle Trigger: Require 15m Bullish/Bearish Engulfing or Pinbar wick rejection at the key zone.' },
+const EXAMPLE_STRATEGIES = [
+  {
+    title: '🕯️ 15m Hammer & RSI Reversal Scalper',
+    desc: 'Catches trend exhaustion with 15m Hammer/Engulfing candles in oversold/overbought zones.',
+    instructions: `# 15m Hammer & RSI Reversal Scalper
+- Primary Timeframe: 15m, Higher Timeframe: 1h trend direction.
+- Entry Trigger: Buy when a Bullish Hammer or Bullish Engulfing candle forms at support AND 15m RSI is below 38.
+- Entry Trigger Short: Sell when Shooting Star or Bearish Engulfing forms at resistance AND 15m RSI is above 62.
+- Risk/Reward: Target minimum 1:2.5 RR.
+- Stop Loss: 2 pips beyond the trigger candle wick.
+- Session: London Open (07:00 - 10:00 UTC) and NY Open (12:00 - 15:00 UTC).`,
+  },
+  {
+    title: '🎯 London & NY Killzone Liquidity Sweep',
+    desc: 'Waits for Asian session high/low sweep during London/NY open before entering on market structure shift.',
+    instructions: `# London & NY Killzone Liquidity Sweep
+- Execution Window: London Open (07:00 - 10:00 UTC) and NY Open (12:00 - 15:00 UTC).
+- Rule 1: Wait for price to sweep Asian Session High (for Sell) or Asian Low (for Buy).
+- Rule 2: Confirm with 15m Market Structure Shift (MSS) and Fair Value Gap (FVG) creation.
+- Rule 3: Check Silver (XAG/USD) SMT Divergence confirmation.
+- Risk Management: 1% risk per trade. Move Stop Loss to Break-Even at 1.0R. Take 50% partials at 1.5R.`,
+  },
+  {
+    title: '🛡️ Conservative 1H Trend Follower',
+    desc: 'Trades strictly in the direction of the 1H 50/200 EMA trend on 15m pullbacks.',
+    instructions: `# Conservative 1H Trend Follower
+- Timeframe: 1H Trend Filter, 15m Entry Execution.
+- Trend Condition: 1H EMA 21 > EMA 50 > EMA 200 for Bullish trend.
+- Entry Trigger: Wait for 15m pullback into the EMA 21 zone with Bullish Candlestick confirmation.
+- Exit Protocol: Target previous swing high (minimum 1:2.0 RR). Stop Loss below the recent swing low.
+- Risk: 0.5% - 1.0% per trade. Avoid trading during high-impact USD news.`,
+  },
+];
+
+const QUICK_INJECTORS = [
+  { label: '🕯️ Hammer & Reversal Candle Trigger', text: '\n- Candle Trigger: Look for 15m Hammer or Bullish Engulfing candle rejection at key support.' },
+  { label: '📉 RSI Regular & Hidden Divergence', text: '\n- Divergence Gate: Require 15m RSI Bullish Divergence before executing long entries.' },
+  { label: '🎯 London & NY Killzone Sweeps', text: '\n- Session Gate: Execute exclusively during London Open (07:00-10:00 UTC) and NY Open (12:00-15:00 UTC).' },
+  { label: '🏛️ Silver (XAG/USD) SMT Filter', text: '\n- SMT Filter: Verify Gold vs Silver inverse correlation divergence.' },
+  { label: '🛡️ Move SL to BE at 1.0R', text: '\n- Trade Management: Automatically move Stop Loss to Break-Even once 1.0R is secured.' },
+  { label: '⚡ 50% Partials at 1.5R', text: '\n- Profit Protocol: Close 50% position size at 1.5R, trail remainder to 1:3.0 RR.' },
 ];
 
 export default function StrategyPanel({ onStrategySaved }) {
@@ -28,8 +63,20 @@ export default function StrategyPanel({ onStrategySaved }) {
   const [instructions, setInstructions] = useState('');
   const [title, setTitle] = useState('');
 
-  // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'backtest' | 'telemetry'
+  // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'backtest' | 'history'
   const [activeSubTab, setActiveSubTab] = useState('editor');
+
+  // Preview Confirmation Modal State (High Priority)
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewSpec, setPreviewSpec] = useState(null);
+  const [compilingPreview, setCompilingPreview] = useState(false);
+  const [activating, setActivating] = useState(false);
+
+  // Example Library Toggle
+  const [showExamples, setShowExamples] = useState(false);
+
+  // Flash Highlight for Quick Add Chips
+  const [chipFlashText, setChipFlashText] = useState(null);
 
   // Live Rule Conformance HUD State
   const [hudData, setHudData] = useState(null);
@@ -37,16 +84,11 @@ export default function StrategyPanel({ onStrategySaved }) {
 
   // Backtest State
   const [backtestData, setBacktestData] = useState(null);
-  const [backtestLoading, setBacktestLoading] = useState(false);
-
-  // Telemetry State
-  const [telemetry, setTelemetry] = useState(null);
-  const [telemetryLoading, setTelemetryLoading] = useState(false);
+  const [backtesting, setBacktesting] = useState(false);
 
   // Status & Loading Flags
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [compiling, setCompiling] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [saveToast, setSaveToast] = useState(null);
@@ -54,6 +96,8 @@ export default function StrategyPanel({ onStrategySaved }) {
   // New Strategy Modal
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+
+  const textareaRef = useRef(null);
 
   const showToast = (text, type = 'success') => {
     setSaveToast({ text, type });
@@ -69,7 +113,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         setStrategies(data.strategies || []);
         const targetId = selectId || data.activeId || data.strategies[0]?.id;
         setActiveId(data.activeId);
-        
+
         const target = data.strategies.find((s) => s.id === targetId) || data.strategies[0];
         if (target) {
           setCurrentStrategy(target);
@@ -100,23 +144,26 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   }, []);
 
-  // Fetch Full Market Telemetry
-  const fetchTelemetry = useCallback(async () => {
-    setTelemetryLoading(true);
+  // Run MT5 Backtest
+  const runBacktest = useCallback(async () => {
+    setBacktesting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/market/full-telemetry`);
+      const res = await fetch(`${API_BASE}/api/strategy/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candleCount: 250 }),
+      });
       if (res.ok) {
         const data = await res.json();
-        setTelemetry(data);
+        setBacktestData(data);
       }
     } catch (e) {
-      console.error('Telemetry fetch error:', e);
+      console.error('Backtest fetch error:', e);
     } finally {
-      setTelemetryLoading(false);
+      setBacktesting(false);
     }
   }, []);
 
-  // Auto-refresh HUD if HUD tab is active
   useEffect(() => {
     fetchStrategies();
   }, [fetchStrategies]);
@@ -127,7 +174,10 @@ export default function StrategyPanel({ onStrategySaved }) {
       const interval = setInterval(fetchHUD, 4000);
       return () => clearInterval(interval);
     }
-  }, [activeSubTab, fetchHUD]);
+    if (activeSubTab === 'backtest' && !backtestData) {
+      runBacktest();
+    }
+  }, [activeSubTab, fetchHUD, runBacktest, backtestData]);
 
   const handleSelectStrategy = (strat) => {
     setCurrentStrategy(strat);
@@ -136,9 +186,15 @@ export default function StrategyPanel({ onStrategySaved }) {
     setTestResult(null);
   };
 
+  // Quick Injector with Visual Flash Feedback
   const handleInjectRule = (snippet) => {
-    setInstructions((prev) => prev.trim() + '\n' + snippet.trim() + '\n');
-    showToast('⚡ Institutional Rule injected!', 'success');
+    setInstructions((prev) => {
+      const updated = prev.trim() + '\n' + snippet.trim() + '\n';
+      return updated;
+    });
+    setChipFlashText(snippet.trim());
+    showToast(`⚡ Inserted: "${snippet.trim().substring(0, 45)}..."`, 'success');
+    setTimeout(() => setChipFlashText(null), 3000);
   };
 
   // Save Raw Instructions
@@ -156,7 +212,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         }),
       });
       if (res.ok) {
-        showToast('✅ Strategy Instructions saved successfully!', 'success');
+        showToast('✅ Strategy Instructions saved!', 'success');
         await fetchStrategies(currentStrategy.id);
       } else {
         showToast('❌ Failed saving strategy', 'error');
@@ -168,52 +224,89 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   };
 
-  // "⚡ Load Instructions & Compile AI Playbook"
-  const handleCompilePlaybook = async () => {
-    if (!currentStrategy) return;
-    setCompiling(true);
+  // STEP 1: "Load Instructions & Compile" -> Triggers PREVIEW Modal
+  const handleCompilePreview = async () => {
+    if (!instructions.trim()) {
+      showToast('⚠️ Please write some instructions first', 'warn');
+      return;
+    }
+    setCompilingPreview(true);
     try {
-      const res = await fetch(`${API_BASE}/api/strategy/compile-playbook`, {
+      const res = await fetch(`${API_BASE}/api/strategy/compile-preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: currentStrategy.id,
+          id: currentStrategy?.id,
           instructions,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        showToast('🧠 AI Strategy Playbook compiled & linked!', 'success');
-        setActiveSubTab('playbook');
-        await fetchStrategies(currentStrategy.id);
+        if (data.needsClarification) {
+          showToast(`❓ Clarification needed: ${data.clarification?.question_to_user}`, 'warn');
+          return;
+        }
+        setPreviewSpec(data.previewSpec);
+        setShowPreviewModal(true);
       } else {
-        showToast('❌ Failed compiling playbook', 'error');
+        showToast('❌ Compilation error', 'error');
       }
     } catch (e) {
-      showToast('❌ Compilation error: ' + e.message, 'error');
+      showToast('❌ Error: ' + e.message, 'error');
     } finally {
-      setCompiling(false);
+      setCompilingPreview(false);
     }
   };
 
-  // Run Historical Simulation Backtest
-  const handleRunBacktest = async () => {
-    setBacktestLoading(true);
+  // STEP 2: "Confirm & Activate" -> Saves to Version History & Makes Strategy Live
+  const handleConfirmActivate = async () => {
+    if (!currentStrategy || !previewSpec) return;
+    setActivating(true);
     try {
-      const res = await fetch(`${API_BASE}/api/strategy/backtest`, {
+      const res = await fetch(`${API_BASE}/api/strategy/confirm-activate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candleCount: 250 }),
+        body: JSON.stringify({
+          id: currentStrategy.id,
+          instructions,
+          compiledSpec: previewSpec,
+          executionMode: currentStrategy.executionMode || 'auto_execute',
+        }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setBacktestData(data);
-        showToast('🧪 Historical MT5 simulation complete!', 'success');
+        setShowPreviewModal(false);
+        showToast(`🟢 "${previewSpec.title}" is now LIVE 24/7!`, 'success');
+        setActiveSubTab('playbook');
+        await fetchStrategies(currentStrategy.id);
+      } else {
+        showToast('❌ Failed activating strategy', 'error');
       }
     } catch (e) {
-      showToast('❌ Backtest failed: ' + e.message, 'error');
+      showToast('❌ Error: ' + e.message, 'error');
     } finally {
-      setBacktestLoading(false);
+      setActivating(false);
+    }
+  };
+
+  // Rollback to historical version
+  const handleRollback = async (versionNumber) => {
+    if (!currentStrategy) return;
+    if (!confirm(`Revert to Strategy Version #${versionNumber}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/strategy/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentStrategy.id,
+          version: versionNumber,
+        }),
+      });
+      if (res.ok) {
+        showToast(`⏪ Reverted to Version #${versionNumber}!`, 'success');
+        await fetchStrategies(currentStrategy.id);
+      }
+    } catch (e) {
+      showToast('❌ Rollback error: ' + e.message, 'error');
     }
   };
 
@@ -228,7 +321,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       });
       if (res.ok) {
         setActiveId(currentStrategy.id);
-        showToast(`🟢 "${currentStrategy.title}" is now active 24/7!`, 'success');
+        showToast(`🟢 "${currentStrategy.title}" is active 24/7!`, 'success');
       }
     } catch (e) {
       showToast('❌ Error: ' + e.message, 'error');
@@ -244,7 +337,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
-          instructions: `# Custom Trading Strategy Directives\n- Trade strictly during London & NY sessions.\n- Require 15m Fair Value Gap sweep before entry.\n- Minimum 1:2.0 Risk-to-Reward.`,
+          instructions: `# Custom Strategy Directives\n- 15m timeframe: Look for Hammer or Bullish Engulfing candles.\n- Risk/Reward 1:2.0.`,
         }),
       });
       if (res.ok) {
@@ -262,7 +355,7 @@ export default function StrategyPanel({ onStrategySaved }) {
   // Delete Strategy
   const handleDeleteStrategy = async () => {
     if (!currentStrategy || strategies.length <= 1) return;
-    if (!confirm(`Are you sure you want to delete "${currentStrategy.title}"?`)) return;
+    if (!confirm(`Delete strategy "${currentStrategy.title}"?`)) return;
     try {
       const res = await fetch(`${API_BASE}/api/strategy/delete`, {
         method: 'POST',
@@ -303,24 +396,30 @@ export default function StrategyPanel({ onStrategySaved }) {
     return (
       <div className="flex items-center justify-center h-full bg-[#0B0E14] text-textMuted font-mono text-xs">
         <RefreshCw className="w-5 h-5 animate-spin text-gold mr-2" />
-        <span>Loading Institutional Strategy Engine...</span>
+        <span>Loading Universal Dynamic Strategy Engine...</span>
       </div>
     );
   }
 
   const isCurrentActive = currentStrategy?.id === activeId;
   const playbook = currentStrategy?.compiledPlaybook;
+  const historyList = currentStrategy?.history || [];
+  const executionMode = currentStrategy?.executionMode || 'auto_execute';
+
+  const charCount = instructions.length;
+  const wordCount = instructions.trim() ? instructions.trim().split(/\s+/).length : 0;
+  const ruleCount = (instructions.match(/^[ \t]*[-*•\d+.]/gm) || []).length;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#090C12] text-textPrimary font-mono text-xs overflow-hidden select-none">
-      
-      {/* TOP HEADER: Multi-Strategy Selector & Action Buttons */}
+
+      {/* TOP HEADER: Strategy Switcher & Persistent Status Badge */}
       <div className="h-12 px-4 bg-[#0D1118] border-b border-borderHairline flex items-center justify-between flex-shrink-0 z-20">
-        
-        {/* Left: Strategy Selector Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-[65%] py-1">
-          <div className="flex items-center gap-1.5 font-bold text-gold mr-2 flex-shrink-0">
-            <Cpu className="w-4 h-4 text-gold animate-pulse" />
+
+        {/* Left: Strategy Selector */}
+        <div className="flex items-center gap-2 overflow-x-auto max-w-[55%] py-1">
+          <div className="flex items-center gap-1.5 font-bold text-gold mr-1 flex-shrink-0">
+            <Cpu className="w-4 h-4 text-gold" />
             <span className="text-[11px] tracking-wide">STRATEGY:</span>
           </div>
 
@@ -341,7 +440,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 <span className="truncate max-w-[130px]">{strat.title}</span>
                 {strat.compiledPlaybook && (
                   <span className={`text-[8px] px-1 rounded ${isSelected ? 'bg-black/30 text-black' : 'bg-accent/20 text-accent font-mono'}`}>
-                    PLAYBOOK
+                    v{strat.history?.length || 1}
                   </span>
                 )}
               </button>
@@ -351,14 +450,14 @@ export default function StrategyPanel({ onStrategySaved }) {
           <button
             onClick={() => setShowNewModal(true)}
             className="h-7 px-2.5 bg-[#171E2E] hover:bg-[#20293D] text-gold border border-gold/30 rounded font-bold flex items-center gap-1 transition text-[10px] flex-shrink-0"
-            title="Create New Custom Strategy"
+            title="Create New Strategy"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>NEW STRATEGY</span>
+            <span>NEW</span>
           </button>
         </div>
 
-        {/* Right: Main Execution Controls */}
+        {/* Right: Master Controls & Persistent Status */}
         <div className="flex items-center gap-2">
           {saveToast && (
             <span
@@ -374,35 +473,45 @@ export default function StrategyPanel({ onStrategySaved }) {
             </span>
           )}
 
-          {/* Active 24/7 Switch */}
+          {/* Persistent Strategy Status Badge */}
+          <div className={`px-2.5 py-1 rounded border font-bold text-[10px] flex items-center gap-1.5 ${
+            executionMode === 'auto_execute'
+              ? 'bg-up/15 text-up border-up/30 shadow-sm'
+              : 'bg-yellow-400/15 text-yellow-400 border-yellow-400/30'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${executionMode === 'auto_execute' ? 'bg-up animate-pulse' : 'bg-yellow-400'}`} />
+            <span>{executionMode === 'auto_execute' ? '🟢 AUTO-EXECUTE (REAL TRADES)' : '👁️ WATCH-ONLY (ALERTS ONLY)'}</span>
+          </div>
+
+          {/* Active 24/7 Toggle */}
           <button
             onClick={handleSetActive}
-            className={`h-7 px-3 rounded font-bold flex items-center gap-1.5 transition border text-[11px] ${
+            className={`h-7 px-3 rounded font-bold flex items-center gap-1.5 transition border text-[10px] ${
               isCurrentActive
                 ? 'bg-up/20 text-up border-up/40'
                 : 'bg-[#151B28] text-textMuted border-white/10 hover:border-white/30 hover:text-white'
             }`}
           >
             {isCurrentActive ? <ToggleRight className="w-4 h-4 text-up" /> : <ToggleLeft className="w-4 h-4" />}
-            <span>{isCurrentActive ? '🟢 ACTIVE 24/7' : 'SET ACTIVE 24/7'}</span>
+            <span>{isCurrentActive ? '🟢 24/7 ACTIVE' : 'SET ACTIVE'}</span>
           </button>
 
-          {/* Load Instructions & Compile Playbook Button */}
+          {/* Step 1: Load Instructions & Compile -> Preview Step */}
           <button
-            onClick={handleCompilePlaybook}
-            disabled={compiling}
+            onClick={handleCompilePreview}
+            disabled={compilingPreview}
             className="h-7 px-3.5 bg-accent hover:bg-cyan-400 text-black font-bold rounded flex items-center gap-1.5 transition shadow-sm disabled:opacity-50 text-[11px]"
-            title="AI parses natural language instructions and compiles into an operational execution playbook"
+            title="Parse instructions and show plain-language preview before going live"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${compiling ? 'animate-spin' : ''}`} />
-            <span>{compiling ? 'AI Compiling...' : '⚡ Load Instructions & Compile'}</span>
+            <Sparkles className={`w-3.5 h-3.5 ${compilingPreview ? 'animate-spin' : ''}`} />
+            <span>{compilingPreview ? 'AI Parsing...' : '⚡ Load Instructions & Compile'}</span>
           </button>
 
           {/* Save Raw Instructions Button */}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="h-7 px-3.5 bg-gold hover:bg-yellow-400 text-black font-bold rounded flex items-center gap-1.5 transition shadow-sm disabled:opacity-50 text-[11px]"
+            className="h-7 px-3 bg-gold hover:bg-yellow-400 text-black font-bold rounded flex items-center gap-1.5 transition shadow-sm disabled:opacity-50 text-[11px]"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{saving ? 'Saving...' : 'Save'}</span>
@@ -420,95 +529,109 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       </div>
 
-      {/* SECONDARY NAVIGATION: 5 Institutional Sub-Tabs */}
-      <div className="h-9 px-4 bg-[#0A0E17] border-b border-borderHairline flex items-center justify-between text-[11px]">
-        <div className="flex items-center gap-2">
+      {/* SECONDARY NAVIGATION: 5 Plain Language Tabs with Subtitles */}
+      <div className="h-12 px-4 bg-[#0A0E17] border-b border-borderHairline flex items-center justify-between text-[11px]">
+        <div className="flex items-center gap-1">
+          {/* Tab 1 */}
           <button
             onClick={() => setActiveSubTab('editor')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+            className={`flex flex-col items-start px-3 py-1 rounded transition ${
               activeSubTab === 'editor'
                 ? 'bg-[#182030] text-gold border border-gold/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>1. ✍️ Rules & Injector</span>
+            <span className="font-bold flex items-center gap-1.5 text-xs">
+              <FileText className="w-3.5 h-3.5" /> 1. Write Strategy
+            </span>
+            <span className="text-[8px] text-textMuted">Write instructions in English or Urdu</span>
           </button>
 
+          {/* Tab 2 */}
           <button
             onClick={() => {
               setActiveSubTab('hud');
               fetchHUD();
             }}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+            className={`flex flex-col items-start px-3 py-1 rounded transition ${
               activeSubTab === 'hud'
                 ? 'bg-[#182030] text-up border border-up/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
-            <CheckCircle2 className="w-3.5 h-3.5 text-up animate-pulse" />
-            <span>2. 🟢 Live Rule Conformance HUD</span>
+            <span className="font-bold flex items-center gap-1.5 text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-up animate-pulse" /> 2. Live Status
+            </span>
+            <span className="text-[8px] text-textMuted">Real-time rule checklist & match score</span>
           </button>
 
+          {/* Tab 3 */}
           <button
             onClick={() => setActiveSubTab('playbook')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+            className={`flex flex-col items-start px-3 py-1 rounded transition ${
               activeSubTab === 'playbook'
                 ? 'bg-[#182030] text-accent border border-accent/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>3. 🤖 AI Operational Playbook</span>
+            <span className="font-bold flex items-center gap-1.5 text-xs">
+              <BookOpen className="w-3.5 h-3.5" /> 3. How AI Behaves
+            </span>
+            <span className="text-[8px] text-textMuted">Compiled playbook & trading logic</span>
           </button>
 
+          {/* Tab 4 */}
           <button
             onClick={() => {
               setActiveSubTab('backtest');
-              if (!backtestData) handleRunBacktest();
+              runBacktest();
             }}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+            className={`flex flex-col items-start px-3 py-1 rounded transition ${
               activeSubTab === 'backtest'
                 ? 'bg-[#182030] text-yellow-400 border border-yellow-400/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
-            <Award className="w-3.5 h-3.5 text-yellow-400" />
-            <span>4. 🧪 MT5 Backtest & AI Tuner</span>
+            <span className="font-bold flex items-center gap-1.5 text-xs">
+              <BarChart2 className="w-3.5 h-3.5" /> 4. Backtest & Adjust
+            </span>
+            <span className="text-[8px] text-textMuted">Test on historical MT5 candles</span>
           </button>
 
+          {/* Tab 5 */}
           <button
-            onClick={() => {
-              setActiveSubTab('telemetry');
-              fetchTelemetry();
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
-              activeSubTab === 'telemetry'
+            onClick={() => setActiveSubTab('history')}
+            className={`flex flex-col items-start px-3 py-1 rounded transition ${
+              activeSubTab === 'history'
                 ? 'bg-[#182030] text-cyan-400 border border-cyan-400/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" />
-            <span>5. 🔍 Telemetry & Patterns</span>
+            <span className="font-bold flex items-center gap-1.5 text-xs">
+              <History className="w-3.5 h-3.5" /> 5. Version History
+            </span>
+            <span className="text-[8px] text-textMuted">View past versions & rollback</span>
           </button>
         </div>
 
+        {/* Quick Summary Pill */}
         <div className="flex items-center gap-3 text-[10px] text-textMuted">
           {currentStrategy?.updatedAt && (
-            <span>Updated: <b className="text-textPrimary">{new Date(currentStrategy.updatedAt).toLocaleTimeString()}</b></span>
+            <span>Last Updated: <b className="text-textPrimary">{new Date(currentStrategy.updatedAt).toLocaleTimeString()}</b></span>
           )}
-          <span>Length: <b className="text-textPrimary">{instructions.length} chars</b></span>
         </div>
       </div>
 
-      {/* MAIN VIEWPORT */}
+      {/* MAIN CONTENT VIEWPORT */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* SUB-TAB 1: RAW INSTRUCTIONS & QUICK INJECTOR */}
+        {/* TAB 1: WRITE STRATEGY (EDITOR & LIVE EVALUATOR) */}
         {activeSubTab === 'editor' && (
           <div className="flex-1 flex overflow-hidden">
-            {/* Left: Textarea Editor & Injector Chips */}
+            {/* Left: Textarea Editor, Quick Chips, Inline Guidance, Examples */}
             <div className="flex-1 flex flex-col border-r border-borderHairline bg-[#0B0E14] overflow-hidden">
+              
+              {/* Strategy Title & Guidance Bar */}
               <div className="p-2 px-3 bg-[#0F1420] border-b border-borderHairline flex items-center justify-between text-[11px]">
                 <input
                   type="text"
@@ -517,32 +640,91 @@ export default function StrategyPanel({ onStrategySaved }) {
                   placeholder="Strategy Title..."
                   className="bg-transparent font-bold text-white text-sm focus:outline-none focus:ring-1 focus:ring-gold/40 px-2 py-0.5 rounded w-1/2"
                 />
-                <span className="text-[10px] text-textMuted">✍️ Type in English, Roman Urdu, or Urdu</span>
+                
+                {/* Example Strategy Library Toggle */}
+                <button
+                  onClick={() => setShowExamples(!showExamples)}
+                  className="px-2.5 py-1 rounded bg-[#171E2E] hover:bg-[#20293D] text-gold border border-gold/30 text-[10px] font-bold flex items-center gap-1 transition"
+                >
+                  <BookOpen className="w-3 h-3" />
+                  <span>{showExamples ? 'Hide Example Library' : '📖 Example Strategy Library'}</span>
+                  {showExamples ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
               </div>
 
-              {/* Quick Institutional Rule Injector Chips */}
+              {/* Collapsible Example Strategy Library */}
+              {showExamples && (
+                <div className="p-3 bg-[#111726] border-b border-gold/30 grid grid-cols-3 gap-2 flex-shrink-0 animate-fadeIn">
+                  {EXAMPLE_STRATEGIES.map((ex, idx) => (
+                    <div key={idx} className="p-2.5 rounded bg-[#161D2E] border border-white/10 hover:border-gold/50 flex flex-col justify-between space-y-1.5 transition">
+                      <div>
+                        <div className="font-bold text-white text-[11px]">{ex.title}</div>
+                        <div className="text-[9px] text-textMuted mt-0.5 leading-tight">{ex.desc}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setInstructions(ex.instructions);
+                          setTitle(ex.title);
+                          setShowExamples(false);
+                          showToast(`✅ Loaded "${ex.title}" into editor!`, 'success');
+                        }}
+                        className="py-1 bg-gold/20 hover:bg-gold/40 text-gold border border-gold/40 rounded text-[9px] font-bold flex items-center justify-center gap-1 transition"
+                      >
+                        <Copy className="w-2.5 h-2.5" />
+                        <span>Load Template</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick Add Rule Chips with Visual Feedback */}
               <div className="p-2 px-3 bg-[#0D121D] border-b border-borderHairline flex items-center gap-1.5 overflow-x-auto">
                 <span className="text-[9px] uppercase font-bold text-gold flex items-center gap-1 mr-1 flex-shrink-0">
                   <Zap className="w-3 h-3" /> Quick Add Rules:
                 </span>
-                {RULE_INJECTORS.map((inj, idx) => (
+                {QUICK_INJECTORS.map((inj, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleInjectRule(inj.text)}
-                    className="px-2 py-0.5 bg-[#141A28] hover:bg-[#1D253A] text-textPrimary hover:text-white border border-white/10 hover:border-gold/40 rounded text-[10px] whitespace-nowrap transition"
+                    className="px-2 py-0.5 bg-[#141A28] hover:bg-[#1D253A] text-textPrimary hover:text-white border border-white/10 hover:border-gold/40 rounded text-[10px] whitespace-nowrap transition active:scale-95"
                   >
                     {inj.label}
                   </button>
                 ))}
               </div>
 
+              {/* Chip Flash Animation Overlay */}
+              {chipFlashText && (
+                <div className="bg-up/15 border-b border-up/30 text-up px-3 py-1 text-[10px] font-bold flex items-center gap-1.5 animate-pulse">
+                  <Sparkle className="w-3 h-3" />
+                  <span>Added to Strategy: &quot;{chipFlashText}&quot;</span>
+                </div>
+              )}
+
+              {/* Textarea Editor */}
               <textarea
+                ref={textareaRef}
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Write your trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Example:&#10;1. Sirf London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;2. 15m Fair Value Gap sweep pe 5m CHoCH confirmation ka intezar karo.&#10;3. RSI must be < 35 for BUY setups.&#10;4. Minimum 1:2.0 Risk-to-Reward ratio hona lazmi hai.&#10;5. Click '⚡ Load Instructions & Compile' to let AI learn your rules."
+                placeholder="Write your custom trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Examples:&#10;1. 15m timeframe pe jab Hammer ya Bullish Engulfing candle bane aur RSI 38 se kam ho to BUY trade lo.&#10;2. Stop Loss candle wick ke 2 pips neechay rakho aur target 1:2.5 Risk to Reward.&#10;3. London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;4. Click '⚡ Load Instructions & Compile' to review what the AI understood before activating."
                 className="flex-1 p-4 bg-transparent text-slate-100 font-mono text-[12px] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-gold/30 selection:bg-gold/20"
                 spellCheck="false"
               />
+
+              {/* Inline Guidance & Metrics Bar directly below Textarea */}
+              <div className="p-2 px-3 bg-[#0D111A] border-t border-borderHairline flex items-center justify-between text-[10px] text-textMuted flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-3 h-3 text-accent" />
+                  <span><b>Pro-Tip:</b> Include <b>Timeframe</b> (15m/1h), <b>Candle Trigger</b> (Hammer/Engulfing), and <b>SL/TP ratio</b> (1:2.0) for best accuracy.</span>
+                </div>
+
+                <div className="flex items-center gap-3 font-mono">
+                  <span>Rules: <b className="text-white">{ruleCount}</b></span>
+                  <span>Words: <b className="text-white">{wordCount}</b></span>
+                  <span>Chars: <b className="text-white">{charCount}</b></span>
+                </div>
+              </div>
             </div>
 
             {/* Right: AI Live Strategy Evaluation Simulator */}
@@ -574,7 +756,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                   <div className="flex flex-col items-center justify-center h-full text-textMuted text-center p-4">
                     <Shield className="w-8 h-8 text-textMuted/40 mb-2" />
                     <p className="text-[10px] leading-relaxed">
-                      Click <b className="text-accent">&quot;Test on Live Market&quot;</b> to let Google Gemini 3.6 Flash check current live Exness MT5 ticks and candles against your instructions.
+                      Click <b className="text-accent">&quot;Test on Live Market&quot;</b> to simulate how Gemini will evaluate incoming ticks right now.
                     </p>
                   </div>
                 )}
@@ -582,7 +764,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 {!testing && testResult && (
                   <div className="space-y-2.5">
                     <div className="p-2.5 rounded bg-[#161C2C] border border-accent/30 text-accent font-bold text-[11px] flex items-center justify-between">
-                      <span>🤖 Gemini 3.6 Flash Strategy Conformance:</span>
+                      <span>🤖 Strategy Decision:</span>
                       <span className="text-[10px] px-2 py-0.5 rounded bg-black/40">
                         {testResult.trade_decision?.action || 'HOLD'}
                       </span>
@@ -597,28 +779,27 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         )}
 
-        {/* SUB-TAB 2: REAL-TIME RULE CONFORMANCE HUD */}
+        {/* TAB 2: LIVE STATUS & RULES (REAL-TIME CONFORMANCE HUD) */}
         {activeSubTab === 'hud' && (
           <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto font-sans">
             <div className="max-w-5xl mx-auto w-full space-y-4">
-              {/* HUD Summary Strip */}
               <div className="p-4 rounded-xl bg-[#0F1424] border border-up/30 shadow-lg flex items-center justify-between">
                 <div>
                   <div className="text-[11px] font-bold text-up uppercase tracking-wider flex items-center gap-1.5 mb-1">
                     <CheckCircle2 className="w-4 h-4 text-up animate-pulse" />
-                    Live Deterministic Rule Conformance HUD
+                    Live Strategy Rule Checklist
                   </div>
                   <h2 className="text-base font-bold text-white">
                     Strategy: {hudData?.strategyTitle || currentStrategy?.title}
                   </h2>
                   <p className="text-xs text-textMuted mt-0.5">
-                    Continuous quantitative rule verification on live Exness MT5 market data.
+                    Real-time verification of your active strategy rules on live Exness MT5 feeds.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <span className="text-[10px] text-textMuted uppercase block">Conformance Score</span>
+                    <span className="text-[10px] text-textMuted uppercase block">Match Score</span>
                     <span className="text-2xl font-bold text-up">{hudData?.conformanceScore || 0}%</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-[#141B2D] border border-white/10 text-center">
@@ -638,7 +819,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 </div>
               </div>
 
-              {/* Rule-by-Rule Live Matrix */}
+              {/* Rule Checklist */}
               <div className="space-y-2.5">
                 {(hudData?.rules || []).map((r, i) => {
                   const isPass = r.status === 'PASS';
@@ -691,216 +872,183 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         )}
 
-        {/* SUB-TAB 3: COMPILED AI OPERATIONAL PLAYBOOK */}
+        {/* TAB 3: HOW AI BEHAVES (COMPILED PLAYBOOK & TRADING LOGIC) */}
         {activeSubTab === 'playbook' && (
-          <div className="flex-1 flex overflow-hidden p-4 bg-[#090C14] overflow-y-auto">
+          <div className="flex-1 flex overflow-hidden p-4 bg-[#090C14] overflow-y-auto font-sans">
             {!playbook ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center text-textMuted p-6">
                 <BookOpen className="w-12 h-12 text-gold/40 mb-3" />
                 <h3 className="text-white font-bold text-sm mb-1">Playbook Not Yet Compiled</h3>
                 <p className="text-[11px] max-w-md mb-4 text-textMuted">
-                  Click the <b>&quot;⚡ Load Instructions & Compile&quot;</b> button in the top bar to let Gemini translate your natural language rules into an autonomous execution playbook.
+                  Click <b>&quot;⚡ Load Instructions & Compile&quot;</b> to compile your instructions into a structured operational playbook.
                 </p>
                 <button
-                  onClick={handleCompilePlaybook}
-                  disabled={compiling}
+                  onClick={handleCompilePreview}
+                  disabled={compilingPreview}
                   className="px-4 py-2 bg-accent hover:bg-cyan-400 text-black font-bold rounded flex items-center gap-2 text-xs transition"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Compile Playbook Now</span>
+                  <span>Compile Strategy Playbook</span>
                 </button>
               </div>
             ) : (
-              <div className="max-w-5xl mx-auto w-full space-y-4 font-sans text-slate-200">
+              <div className="max-w-5xl mx-auto w-full space-y-4 text-slate-200">
                 {/* Header Card */}
-                <div className="p-4 rounded-lg bg-[#0F1422] border border-accent/30 shadow-lg">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="p-4 rounded-xl bg-[#0F1424] border border-accent/30 shadow-lg">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-accent uppercase tracking-wider flex items-center gap-1.5">
                       <Cpu className="w-4 h-4" />
-                      Compiled AI Strategy Identity
+                      AI Operational Mandate
                     </span>
                     <span className="text-[10px] text-textMuted">
-                      Compiled At: {new Date(playbook.compiledAt).toLocaleString()}
+                      Compiled: {new Date(playbook.compiledAt).toLocaleString()}
                     </span>
                   </div>
-                  <h2 className="text-lg font-bold text-white">{playbook.strategy_name || currentStrategy.title}</h2>
-                  <p className="text-xs text-textMuted mt-1">{playbook.core_philosophy}</p>
+                  <h2 className="text-lg font-bold text-white">
+                    {playbook.title || currentStrategy?.title}
+                  </h2>
+                  <p className="text-xs text-textMuted mt-1">{playbook.summary}</p>
                 </div>
 
-                {/* AI Self-Learning Summary in Roman Urdu */}
-                {playbook.ai_learning_summary && (
-                  <div className="p-4 rounded-lg bg-[#141A29] border border-gold/30">
-                    <div className="text-xs font-bold text-gold uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <Compass className="w-4 h-4" />
-                      AI Internal Execution Mandate (Roman Urdu):
-                    </div>
-                    <p className="text-xs leading-relaxed text-slate-100 whitespace-pre-wrap">
-                      {playbook.ai_learning_summary}
-                    </p>
-                  </div>
-                )}
-
-                {/* Monitored Elements Grid */}
+                {/* Grid of Rules */}
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
-                    <span className="text-[11px] font-bold text-gold uppercase tracking-wider block mb-2">
-                      📊 Monitored Indicators
-                    </span>
-                    <div className="space-y-1.5">
-                      {(playbook.monitored_indicators || []).map((ind, i) => (
-                        <div key={i} className="p-2 rounded bg-[#141A29] text-[11px]">
-                          <b className="text-white">{ind.name}</b> ({ind.timeframe}): <span className="text-textMuted">{ind.condition}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
+                  {/* Candlestick Triggers */}
+                  <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-up uppercase tracking-wider block mb-2">
-                      🕯️ Candlestick Patterns
+                      🕯️ Target Candle Patterns
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {(playbook.monitored_candlesticks || []).map((c, i) => (
+                      {(playbook.candle_patterns || []).map((c, i) => (
                         <span key={i} className="px-2 py-1 rounded bg-up/15 text-up text-[10px] font-bold border border-up/30">
-                          {c}
+                          {c.pattern || c} ({c.timeframe || '15m'})
                         </span>
                       ))}
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
-                    <span className="text-[11px] font-bold text-accent uppercase tracking-wider block mb-2">
-                      🏛️ SMC & Session Filters
-                    </span>
-                    <div className="space-y-1.5 text-[11px]">
-                      {(playbook.monitored_smc_structures || []).map((s, i) => (
-                        <div key={i} className="p-2 rounded bg-[#141A29]">
-                          <b className="text-accent">{s.concept}:</b> <span className="text-textMuted">{s.rule}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Trigger Checklist & Risk Protocol */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
-                    <span className="text-[11px] font-bold text-white uppercase tracking-wider block mb-2">
-                      ✅ 24/7 Execution Trigger Checklist
+                  {/* Indicators Used */}
+                  <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline">
+                    <span className="text-[11px] font-bold text-gold uppercase tracking-wider block mb-2">
+                      📊 Indicators Used
                     </span>
                     <div className="space-y-1.5">
-                      {(playbook.execution_trigger_checklist || []).map((step, i) => (
-                        <div key={i} className="flex items-start gap-2 p-2 rounded bg-[#141A29] text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-up flex-shrink-0 mt-0.5" />
-                          <span>{step}</span>
+                      {(playbook.indicators || []).map((ind, i) => (
+                        <div key={i} className="p-2 rounded bg-[#141A29] text-[11px]">
+                          <b className="text-white">{ind.alias || ind.indicator_type}</b>: <span className="text-textMuted">{ind.timeframe}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
-                    <span className="text-[11px] font-bold text-white uppercase tracking-wider block mb-2">
-                      🛡️ Risk Management Protocol
+                  {/* Safety Guardrails */}
+                  <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline">
+                    <span className="text-[11px] font-bold text-accent uppercase tracking-wider block mb-2">
+                      🛡️ Safety Guardrails
                     </span>
-                    {playbook.risk_management_protocol && (
-                      <div className="space-y-1.5 text-[11px]">
-                        <div className="p-2 rounded bg-[#141A29]">
-                          <b>Max Risk:</b> <span className="text-gold font-bold">{playbook.risk_management_protocol.max_risk_percent}% per trade</span>
-                        </div>
-                        <div className="p-2 rounded bg-[#141A29]">
-                          <b>Stop Loss:</b> <span className="text-textMuted">{playbook.risk_management_protocol.stop_loss_logic}</span>
-                        </div>
-                        <div className="p-2 rounded bg-[#141A29]">
-                          <b>Take Profit:</b> <span className="text-textMuted">{playbook.risk_management_protocol.take_profit_logic}</span>
-                        </div>
-                        <div className="p-2 rounded bg-[#141A29]">
-                          <b>Break-Even:</b> <span className="text-textMuted">{playbook.risk_management_protocol.break_even_rule}</span>
-                        </div>
+                    {playbook.guardrails && (
+                      <div className="space-y-1 text-[11px]">
+                        <div>Daily Loss: <b className="text-gold">{playbook.guardrails.max_daily_loss_percent}%</b></div>
+                        <div>News Buffer: <b className="text-gold">{playbook.guardrails.news_blackout_minutes}m</b></div>
+                        <div>Max Spread: <b className="text-gold">{playbook.guardrails.max_spread_pips} pips</b></div>
+                        <div>Sessions: <b className="text-accent">{playbook.guardrails.allowed_sessions?.join(', ')}</b></div>
                       </div>
                     )}
                   </div>
                 </div>
+
+                {/* Risk Parameters */}
+                <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline">
+                  <span className="text-[11px] font-bold text-white uppercase tracking-wider block mb-2">
+                    ⚖️ Risk & Position Sizing Parameters
+                  </span>
+                  {playbook.risk_parameters && (
+                    <div className="grid grid-cols-4 gap-2 text-[11px]">
+                      <div className="p-2 rounded bg-[#141A29]">
+                        <span className="text-textMuted block text-[9px] uppercase">Risk / Trade</span>
+                        <span className="text-gold font-bold">{playbook.risk_parameters.risk_percent_per_trade}%</span>
+                      </div>
+                      <div className="p-2 rounded bg-[#141A29]">
+                        <span className="text-textMuted block text-[9px] uppercase">Stop Loss</span>
+                        <span className="text-white font-bold">{playbook.risk_parameters.sl_value} pips ({playbook.risk_parameters.sl_type})</span>
+                      </div>
+                      <div className="p-2 rounded bg-[#141A29]">
+                        <span className="text-textMuted block text-[9px] uppercase">Take Profit</span>
+                        <span className="text-up font-bold">1:{playbook.risk_parameters.tp_value} RR</span>
+                      </div>
+                      <div className="p-2 rounded bg-[#141A29]">
+                        <span className="text-textMuted block text-[9px] uppercase">Max Trades</span>
+                        <span className="text-white font-bold">{playbook.risk_parameters.max_open_trades}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* SUB-TAB 4: HISTORICAL MT5 BACKTEST & AI PARAMETER AUTO-TUNER */}
+        {/* TAB 4: BACKTEST & ADJUST (MT5 HISTORICAL SIMULATION) */}
         {activeSubTab === 'backtest' && (
           <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto font-sans">
             <div className="max-w-5xl mx-auto w-full space-y-4">
-              {/* Backtest Header & Trigger */}
               <div className="p-4 rounded-xl bg-[#121828] border border-yellow-400/30 shadow-lg flex items-center justify-between">
                 <div>
                   <div className="text-[11px] font-bold text-yellow-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                    <Award className="w-4 h-4 text-yellow-400" />
-                    Historical MT5 Candle Backtest & Parameter Auto-Tuner
+                    <BarChart2 className="w-4 h-4 text-yellow-400" />
+                    MT5 Historical Candle Simulator
                   </div>
                   <h2 className="text-base font-bold text-white">
-                    Testing on Exness MT5 15m Real Data
+                    Simulate: {currentStrategy?.title}
                   </h2>
                   <p className="text-xs text-textMuted mt-0.5">
-                    Evaluates strategy entry triggers, SL/TP dynamics, and Win Rate over past market cycles.
+                    Tests your strategy conditions against real Exness historical candles to measure expectancy.
                   </p>
                 </div>
 
                 <button
-                  onClick={handleRunBacktest}
-                  disabled={backtestLoading}
-                  className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded-lg flex items-center gap-2 text-xs transition shadow-md disabled:opacity-50"
+                  onClick={runBacktest}
+                  disabled={backtesting}
+                  className="h-8 px-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded flex items-center gap-1.5 text-xs transition"
                 >
-                  <Play className={`w-3.5 h-3.5 ${backtestLoading ? 'animate-spin' : ''}`} />
-                  <span>{backtestLoading ? 'Simulating MT5 Candles...' : 'Run Simulation'}</span>
+                  <Play className={`w-3.5 h-3.5 ${backtesting ? 'animate-spin' : ''}`} />
+                  <span>{backtesting ? 'Simulating...' : 'Run Simulation'}</span>
                 </button>
               </div>
 
-              {backtestLoading && (
-                <div className="flex flex-col items-center justify-center p-12 text-textMuted gap-2">
-                  <RefreshCw className="w-8 h-8 animate-spin text-yellow-400" />
-                  <span>Running deterministic simulation across 250 historical Exness candles...</span>
-                </div>
-              )}
-
-              {!backtestLoading && backtestData && (
-                <div className="space-y-4">
-                  {/* Metric Cards Grid */}
-                  <div className="grid grid-cols-5 gap-3">
-                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
-                      <span className="text-[10px] text-textMuted uppercase block">Simulated Win Rate</span>
-                      <span className="text-2xl font-bold text-up">{backtestData.winRate}%</span>
+              {backtestData && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
+                      <span className="text-[10px] text-textMuted uppercase block">Win Rate</span>
+                      <div className="text-2xl font-bold text-up">{backtestData.winRate}%</div>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                    <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
                       <span className="text-[10px] text-textMuted uppercase block">Total Setups</span>
-                      <span className="text-2xl font-bold text-white">{backtestData.totalTrades}</span>
+                      <div className="text-2xl font-bold text-white">{backtestData.totalTrades} Trades</div>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                    <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
                       <span className="text-[10px] text-textMuted uppercase block">Profit Factor</span>
-                      <span className="text-2xl font-bold text-yellow-400">{backtestData.profitFactor}</span>
+                      <div className="text-2xl font-bold text-gold">{backtestData.profitFactor}</div>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                    <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
                       <span className="text-[10px] text-textMuted uppercase block">Average R:R</span>
-                      <span className="text-2xl font-bold text-cyan-400">1:{backtestData.averageRR}</span>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
-                      <span className="text-[10px] text-textMuted uppercase block">Max Drawdown</span>
-                      <span className="text-2xl font-bold text-textPrimary">{backtestData.maxDrawdown}</span>
+                      <div className="text-2xl font-bold text-cyan-400">1:{backtestData.averageRR}</div>
                     </div>
                   </div>
 
-                  {/* AI Parameter Tuning Recommendations */}
-                  <div className="p-4 rounded-xl bg-[#141A29] border border-gold/30">
-                    <h3 className="text-xs font-bold text-gold uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" />
-                      AI Parameter Optimization & Tuning Recommendations:
-                    </h3>
-                    <div className="space-y-2">
+                  {/* AI Tuning Advice */}
+                  <div className="p-4 rounded-xl bg-[#0E1422] border border-borderHairline">
+                    <span className="text-xs font-bold text-gold uppercase tracking-wider block mb-2">
+                      💡 AI Parameter Tuning Recommendations
+                    </span>
+                    <ul className="space-y-1.5 text-xs text-slate-200">
                       {(backtestData.aiTuningRecommendations || []).map((rec, i) => (
-                        <div key={i} className="flex items-start gap-2 p-2 rounded bg-[#0E131E] text-xs text-slate-200">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-gold flex-shrink-0 mt-0.5" />
+                        <li key={i} className="flex items-start gap-2">
+                          <Check className="w-3.5 h-3.5 text-up flex-shrink-0 mt-0.5" />
                           <span>{rec}</span>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 </div>
               )}
@@ -908,103 +1056,165 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         )}
 
-        {/* SUB-TAB 5: FULL AI MARKET TELEMETRY & PATTERN INSPECTOR */}
-        {activeSubTab === 'telemetry' && (
-          <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto">
-            <div className="flex items-center justify-between mb-3 flex-shrink-0">
-              <div>
-                <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-up" />
-                  Full Multi-Timeframe AI Telemetry Inspector
-                </h3>
-                <span className="text-[10px] text-textMuted">
-                  Live readings fed directly into Gemini 3.6 Flash reasoning core across all timeframes
-                </span>
+        {/* TAB 5: VERSION HISTORY & ROLLBACK */}
+        {activeSubTab === 'history' && (
+          <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto font-sans">
+            <div className="max-w-5xl mx-auto w-full space-y-4">
+              <div className="p-4 rounded-xl bg-[#0F1424] border border-cyan-400/30 shadow-lg flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <History className="w-4 h-4 text-cyan-400" />
+                    Strategy Version History
+                  </div>
+                  <h2 className="text-base font-bold text-white">
+                    Audit Log & Past Compiled Versions
+                  </h2>
+                  <p className="text-xs text-textMuted mt-0.5">
+                    Review past compiled versions and safely roll back at any time.
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={fetchTelemetry}
-                disabled={telemetryLoading}
-                className="h-7 px-3 bg-[#161B26] hover:bg-[#1E2536] text-up border border-up/40 rounded font-bold flex items-center gap-1.5 text-[10px] transition disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${telemetryLoading ? 'animate-spin' : ''}`} />
-                <span>{telemetryLoading ? 'Refreshing...' : 'Refresh Telemetry'}</span>
-              </button>
+
+              {historyList.length === 0 ? (
+                <div className="p-8 text-center text-textMuted bg-[#0E131E] rounded-xl border border-borderHairline">
+                  <History className="w-8 h-8 text-textMuted/40 mx-auto mb-2" />
+                  <p className="text-xs">No past versions saved yet. Compile and activate a strategy to start recording history.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {historyList.map((ver, idx) => (
+                    <div key={idx} className="p-4 rounded-xl bg-[#0E131E] border border-borderHairline hover:border-cyan-400/40 transition flex items-start justify-between">
+                      <div className="space-y-1.5 max-w-2xl">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-cyan-400/20 text-cyan-400 font-bold text-[10px] border border-cyan-400/30">
+                            Version #{ver.version}
+                          </span>
+                          <span className="font-bold text-white text-xs">{ver.title}</span>
+                          <span className="text-[10px] text-textMuted">
+                            {new Date(ver.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">{ver.summary}</p>
+                        <div className="text-[10px] text-textMuted font-mono">
+                          Mode: <b className="text-up">{ver.executionMode?.toUpperCase() || 'AUTO_EXECUTE'}</b>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleRollback(ver.version)}
+                        className="px-3 py-1.5 bg-[#172030] hover:bg-[#223048] text-cyan-400 border border-cyan-400/40 rounded font-bold text-[10px] flex items-center gap-1.5 transition"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Rollback to v{ver.version}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* COMPILED STRATEGY PREVIEW & CONFIRMATION MODAL (HIGH PRIORITY) */}
+      {showPreviewModal && previewSpec && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0D121F] border border-gold/50 rounded-2xl p-6 w-full max-w-3xl space-y-4 shadow-2xl animate-fadeIn font-sans max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <span className="text-xs font-bold text-gold uppercase tracking-wider flex items-center gap-1.5 mb-0.5">
+                  <ShieldAlert className="w-4 h-4 text-gold" />
+                  Strategy Confirmation Required
+                </span>
+                <h2 className="text-base font-bold text-white">
+                  Preview What AI Understood Before Activating
+                </h2>
+              </div>
+              <span className="text-[10px] px-2.5 py-1 rounded bg-gold/15 text-gold border border-gold/30 font-bold">
+                CANDIDATE SPECIFICATION
+              </span>
             </div>
 
-            {telemetryLoading && !telemetry && (
-              <div className="flex-1 flex items-center justify-center text-textMuted">
-                <RefreshCw className="w-6 h-6 animate-spin text-up mr-2" />
-                <span>Reading live indicators and candlestick patterns...</span>
-              </div>
-            )}
+            {/* Plain-Language Restatement */}
+            <div className="p-4 rounded-xl bg-[#141B2D] border border-gold/30 space-y-1">
+              <span className="text-[10px] font-bold text-gold uppercase tracking-wider block">
+                🧠 Plain-Language AI Synthesis:
+              </span>
+              <p className="text-xs leading-relaxed text-slate-100 font-sans">
+                {previewSpec.summary}
+              </p>
+            </div>
 
-            {telemetry && (
-              <div className="space-y-4">
-                {/* Live Macro Strip */}
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="p-2.5 rounded bg-[#111726] border border-borderHairline">
-                    <span className="text-[9px] uppercase text-textMuted">Live Gold Price</span>
-                    <div className="text-base font-bold text-gold">${telemetry.livePrice}</div>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#111726] border border-borderHairline">
-                    <span className="text-[9px] uppercase text-textMuted">DXY Dollar Index</span>
-                    <div className="text-base font-bold text-white">{telemetry.macro?.DXY?.value || '98.9'}</div>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#111726] border border-borderHairline">
-                    <span className="text-[9px] uppercase text-textMuted">Silver (XAG/USD)</span>
-                    <div className="text-base font-bold text-white">${telemetry.macro?.XAGUSD?.value || '68.86'}</div>
-                  </div>
-                  <div className="p-2.5 rounded bg-[#111726] border border-borderHairline">
-                    <span className="text-[9px] uppercase text-textMuted">Market Session</span>
-                    <div className="text-base font-bold text-accent">{telemetry.session}</div>
-                  </div>
+            {/* Structured Specifications Grid */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
+                <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Target Candles</span>
+                <div className="flex flex-wrap gap-1">
+                  {(previewSpec.candle_patterns || []).map((c, i) => (
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-up/15 text-up text-[10px] font-bold">
+                      {c.pattern || c} ({c.timeframe || '15m'})
+                    </span>
+                  ))}
                 </div>
+              </div>
 
-                {/* Timeframes Grid */}
-                <div className="grid grid-cols-3 gap-3">
-                  {Object.entries(telemetry.telemetry || {}).map(([tf, data]) => (
-                    <div key={tf} className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline space-y-2">
-                      <div className="flex items-center justify-between border-b border-borderHairline pb-1.5">
-                        <span className="text-xs font-bold text-gold uppercase">{tf} Timeframe</span>
-                        <span className="text-[10px] text-textMuted">Close: ${data.latestClose}</span>
-                      </div>
-
-                      {/* Candlestick Pattern */}
-                      <div className="p-1.5 rounded bg-[#141A28] flex items-center justify-between">
-                        <span className="text-[10px] text-textMuted">Pattern:</span>
-                        <span className={`text-[10px] font-bold ${data.candlestickPattern.bias === 'BULLISH' ? 'text-up' : data.candlestickPattern.bias === 'BEARISH' ? 'text-down' : 'text-slate-200'}`}>
-                          {data.candlestickPattern.pattern}
-                        </span>
-                      </div>
-
-                      {/* Indicators */}
-                      <div className="grid grid-cols-2 gap-1 text-[10px]">
-                        <div className="p-1 rounded bg-[#141A28]">
-                          <span className="text-textMuted">RSI (14):</span> <b className={data.indicators.rsi > 70 ? 'text-down' : data.indicators.rsi < 30 ? 'text-up' : 'text-slate-200'}>{data.indicators.rsi || 'N/A'}</b>
-                        </div>
-                        <div className="p-1 rounded bg-[#141A28]">
-                          <span className="text-textMuted">EMA 21:</span> <b>${data.indicators.ema21 || 'N/A'}</b>
-                        </div>
-                        <div className="p-1 rounded bg-[#141A28]">
-                          <span className="text-textMuted">EMA 50:</span> <b>${data.indicators.ema50 || 'N/A'}</b>
-                        </div>
-                        <div className="p-1 rounded bg-[#141A28]">
-                          <span className="text-textMuted">EMA 200:</span> <b>${data.indicators.ema200 || 'N/A'}</b>
-                        </div>
-                      </div>
-
-                      {/* SMC Details */}
-                      <div className="text-[10px] text-textMuted border-t border-borderHairline pt-1">
-                        <div>Trend: <b className="text-slate-200">{data.smc.trend}</b> | Zone: <b className="text-accent">{data.smc.zone}</b></div>
-                      </div>
+              <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
+                <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Indicators</span>
+                <div className="space-y-0.5 text-[10px]">
+                  {(previewSpec.indicators || []).map((ind, i) => (
+                    <div key={i} className="text-slate-200">
+                      • <b>{ind.alias || ind.indicator_type}</b> ({ind.timeframe})
                     </div>
                   ))}
                 </div>
               </div>
+
+              <div className="p-3 rounded-lg bg-[#0E131E] border border-borderHairline">
+                <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Risk Parameters</span>
+                <div className="space-y-0.5 text-[10px]">
+                  <div>Risk: <b className="text-gold">{previewSpec.risk_parameters?.risk_percent_per_trade || 1.0}%</b></div>
+                  <div>Target: <b className="text-up">1:{previewSpec.risk_parameters?.tp_value || 2.0} RR</b></div>
+                  <div>SL: <b className="text-down">{previewSpec.risk_parameters?.sl_value || 20} pips</b></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Assumptions and Defaults Alert */}
+            {((previewSpec.assumptions_made && previewSpec.assumptions_made.length > 0) || (previewSpec.defaults_used && previewSpec.defaults_used.length > 0)) && (
+              <div className="p-3 rounded-xl bg-[#1A1612] border border-warn/30 text-warn text-[11px] space-y-1">
+                <div className="font-bold uppercase flex items-center gap-1.5 text-[10px]">
+                  <AlertTriangle className="w-3.5 h-3.5 text-warn" />
+                  Assumptions & Applied Defaults:
+                </div>
+                <div className="text-slate-300 text-[10px] space-y-0.5">
+                  {(previewSpec.assumptions_made || []).map((a, i) => <div key={i}>• {a}</div>)}
+                  {(previewSpec.defaults_used || []).map((d, i) => <div key={i}>• {d}</div>)}
+                </div>
+              </div>
             )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-4 py-2 rounded-lg bg-[#141A28] hover:bg-[#1E263A] text-slate-300 text-xs font-bold transition"
+              >
+                ✏️ Edit Instructions
+              </button>
+              <button
+                onClick={handleConfirmActivate}
+                disabled={activating}
+                className="px-5 py-2 rounded-lg bg-up hover:bg-emerald-400 text-black text-xs font-bold transition shadow-lg flex items-center gap-1.5"
+              >
+                <CheckCircle2 className={`w-4 h-4 ${activating ? 'animate-spin' : ''}`} />
+                <span>{activating ? 'Activating Live...' : '🟢 Confirm & Activate Strategy'}</span>
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* NEW STRATEGY MODAL */}
       {showNewModal && (
@@ -1020,7 +1230,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. 5m FVG Scalper, Asian Sweep Breakout..."
+                placeholder="e.g. 15m Hammer Scalper, Asian Sweep Breakout..."
                 className="w-full bg-[#161C2C] border border-borderHairline rounded p-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-gold"
                 autoFocus
               />

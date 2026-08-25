@@ -1,0 +1,22 @@
+{
+  "name": "trading-core",
+  "version": "1.0.0",
+  "description": "Pure, strategy-agnostic quantitative trading calculations: technical indicators, candlestick pattern detection, position sizing, risk mathematics, and guardrail validation.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/testCore.js"
+  },
+  "keywords": [
+    "trading",
+    "technical-indicators",
+    "candlestick-patterns",
+    "risk-management",
+    "position-sizing",
+    "guardrails",
+    "quantitative-finance"
+  ],
+  "author": "Ali Raza Makki",
+  "license": "MIT"
+}
