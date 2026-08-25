@@ -5,18 +5,18 @@
 @tailwind utilities;
 
 :root {
-  /* Three-tier background system */
+  /* Three-tier background system (clean layering, no harsh borders) */
   --bg-base: #0a0e14;
-  --bg-panel: #10151d;
-  --bg-elevated: #161d27;
-  --bg-hover: #1c2430;
+  --bg-panel: #0f141d;
+  --bg-elevated: #151b26;
+  --bg-hover: #1c2432;
 
-  /* Subtle Borders (single-layer, 8% white opacity) */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.12);
+  /* Subtle Single-Layer Borders (8% white opacity) */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.14);
   --border-focus: rgba(245, 158, 11, 0.45);
 
-  /* Unified TradingView-standard directional colors */
+  /* Unified Directional Colors */
   --color-bull: #089981;
   --color-bull-bg: rgba(8, 153, 129, 0.12);
   --color-bull-border: rgba(8, 153, 129, 0.28);
@@ -25,7 +25,7 @@
   --color-bear-bg: rgba(242, 54, 69, 0.12);
   --color-bear-border: rgba(242, 54, 69, 0.28);
 
-  /* Unified Accent / Gold */
+  /* Unified Brand Accent */
   --color-gold: #f59e0b;
   --color-gold-hover: #d97706;
   --color-gold-bg: rgba(245, 158, 11, 0.12);
@@ -35,13 +35,13 @@
   --color-cyan-bg: rgba(41, 182, 246, 0.12);
   --color-cyan-border: rgba(41, 182, 246, 0.28);
 
-  /* Text hierarchy with WCAG AA compliance */
+  /* Text hierarchy (WCAG AA compliant) */
   --text-primary: #f0f3f6;
   --text-secondary: #9ca3af;
-  --text-muted: #5d6878;
+  --text-muted: #64748b;
   --text-disabled: #334155;
 
-  /* Semantic status colors */
+  /* Status Colors */
   --status-live: #089981;
   --status-warning: #f59e0b;
   --status-error: #f23645;
@@ -49,24 +49,27 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   GLOBAL RESET: Remove unwanted browser default outlines
+   GLOBAL RESET: Complete elimination of stray outlines & rings
    ═══════════════════════════════════════════════════════════ */
 *, *::before, *::after {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 *:focus {
   outline: none !important;
-  box-shadow: none;
+  box-shadow: none !important;
+}
+
+button:focus, a:focus, input:focus, textarea:focus, select:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 *:focus-visible {
   outline: 1px solid var(--border-focus) !important;
   outline-offset: 1px;
-}
-
-button, a, input, textarea, select {
-  -webkit-tap-highlight-color: transparent;
+  box-shadow: none !important;
 }
 
 html, body {
@@ -82,7 +85,7 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Monospace numeric figures */
+/* Monospace numerals with tabular alignment */
 .font-mono, .tabular-nums {
   font-family: 'JetBrains Mono', 'IBM Plex Mono', 'Roboto Mono', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
@@ -104,25 +107,15 @@ html, body {
   background: rgba(245, 158, 11, 0.6);
 }
 
-/* Real-time Ticker Micro-interactions */
+/* Real-time Ticker Flash */
 @keyframes flashUp {
-  0% {
-    background-color: rgba(8, 153, 129, 0.35);
-    color: #ffffff;
-  }
-  100% {
-    background-color: transparent;
-  }
+  0% { background-color: rgba(8, 153, 129, 0.35); color: #ffffff; }
+  100% { background-color: transparent; }
 }
 
 @keyframes flashDown {
-  0% {
-    background-color: rgba(242, 54, 69, 0.35);
-    color: #ffffff;
-  }
-  100% {
-    background-color: transparent;
-  }
+  0% { background-color: rgba(242, 54, 69, 0.35); color: #ffffff; }
+  100% { background-color: transparent; }
 }
 
 .flash-up {
@@ -135,25 +128,16 @@ html, body {
 
 /* Pulsating Live Status Dot */
 @keyframes liveDotPulse {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.75;
-  }
-  50% {
-    transform: scale(1.25);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(0.9);
-    opacity: 0.75;
-  }
+  0% { transform: scale(0.9); opacity: 0.75; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.75; }
 }
 
 .animate-live-dot {
   animation: liveDotPulse 1.8s infinite ease-in-out;
 }
 
-/* Clean Integrated Panel Header */
+/* Integrated Panel Header */
 .panel-header {
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;

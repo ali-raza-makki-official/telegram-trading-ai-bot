@@ -412,30 +412,30 @@ export default function StrategyPanel({ onStrategySaved }) {
 
       {/* TIER 1: PRIMARY LEFT SIDEBAR (Width: 220px) */}
       <div className="w-[220px] flex-shrink-0 bg-bgPanel border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
-        <div className="p-3 space-y-2.5">
+        <div className="p-3 space-y-3">
           
-          {/* Integrated Header (Issue 2 Fixed) */}
-          <div className="flex items-center justify-between border-b border-borderHairline pb-2">
-            <div className="flex items-center gap-1.5 font-bold text-textSecondary text-[10px] uppercase tracking-wider">
+          {/* Top Action Bar */}
+          <div className="flex items-center justify-between pb-2 border-b border-borderHairline">
+            <div className="flex items-center gap-1.5 text-textMuted text-[10px] uppercase font-bold tracking-wider">
               <Cpu className="w-3.5 h-3.5 text-gold" />
               <span>Strategies</span>
             </div>
             <button
               onClick={() => setShowNewModal(true)}
-              className="p-1 bg-bgElevated hover:bg-bgHover text-gold border border-borderHairline rounded transition"
+              className="p-1 bg-bgElevated hover:bg-bgHover text-gold rounded transition duration-150"
               title="Create New Strategy"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Single Strategy Notice */}
-          <div className="p-2 rounded bg-bgElevated border border-borderHairline text-[9px] text-textSecondary leading-snug flex items-start gap-1.5">
+          {/* Single-Engine Information Tag */}
+          <div className="p-2 rounded bg-bgElevated text-[9px] text-textSecondary leading-snug flex items-start gap-1.5">
             <Info className="w-3 h-3 text-gold flex-shrink-0 mt-0.5" />
             <span><b>Single-Engine Mode:</b> 1 strategy active at a time. Switching auto-switches live execution.</span>
           </div>
 
-          {/* Clean Selected Strategy Cards (No Double Borders) */}
+          {/* Strategy List Cards */}
           <div className="space-y-1.5">
             {strategies.map((strat) => {
               const isSelected = currentStrategy?.id === strat.id;
@@ -446,10 +446,10 @@ export default function StrategyPanel({ onStrategySaved }) {
                 <button
                   key={strat.id}
                   onClick={() => handleSelectStrategy(strat)}
-                  className={`w-full p-2.5 rounded-lg text-left transition duration-150 flex flex-col justify-between space-y-1.5 ${
+                  className={`w-full p-2.5 rounded-md text-left transition duration-150 flex flex-col justify-between space-y-1.5 ${
                     isSelected
-                      ? 'bg-bgElevated text-gold border-l-2 border-l-gold border-y-transparent border-r-transparent font-bold shadow-sm'
-                      : 'bg-bgElevated/50 text-textMuted hover:text-textPrimary hover:bg-bgElevated border border-transparent'
+                      ? 'bg-bgElevated text-gold border-l-2 border-l-gold font-bold'
+                      : 'bg-bgElevated/40 text-textMuted hover:text-textPrimary hover:bg-bgElevated'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -485,9 +485,9 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* Live Execution Controller Card (Issue 7 Fixed) */}
+        {/* Live Execution Controller Card (No Wireframe Outlines) */}
         <div className="p-3 border-t border-borderHairline bg-bgBase space-y-2">
-          <div className="p-2.5 rounded-lg bg-bgElevated border border-borderHairline space-y-2">
+          <div className="p-2.5 rounded-md bg-bgElevated space-y-2">
             <div className="flex items-center justify-between text-[9px] uppercase font-bold text-textMuted">
               <span>Live Engine</span>
               <span className={isCurrentActive ? 'text-up font-bold' : 'text-textMuted'}>
@@ -497,20 +497,20 @@ export default function StrategyPanel({ onStrategySaved }) {
 
             <button
               onClick={handleSetActive}
-              className={`w-full py-1.5 px-2 rounded font-bold text-[10px] flex items-center justify-center gap-1.5 transition duration-150 border ${
+              className={`w-full py-1.5 px-2 rounded-md font-bold text-[10px] flex items-center justify-center gap-1.5 transition duration-150 ${
                 isCurrentActive
-                  ? 'bg-up/20 text-up border-up/40 shadow-sm'
-                  : 'bg-bgPanel text-textMuted border-borderHairline hover:border-white/20 hover:text-textPrimary'
+                  ? 'bg-up/20 text-up'
+                  : 'bg-bgPanel text-textMuted hover:text-textPrimary hover:bg-bgHover'
               }`}
             >
               {isCurrentActive ? <ToggleRight className="w-4 h-4 text-up" /> : <ToggleLeft className="w-4 h-4" />}
               <span>{isCurrentActive ? '24/7 SCANNING: ON' : 'ACTIVATE FOR 24/7'}</span>
             </button>
 
-            <div className={`p-1.5 rounded text-center text-[9px] font-bold border ${
+            <div className={`p-1.5 rounded-md text-center text-[9px] font-bold ${
               executionMode === 'auto_execute'
-                ? 'bg-up/15 text-up border-up/30'
-                : 'bg-warn/15 text-warn border-warn/30'
+                ? 'bg-up/15 text-up'
+                : 'bg-warn/15 text-warn'
             }`}>
               <div className="flex items-center justify-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'auto_execute' ? 'bg-up animate-live-dot' : 'bg-warn'}`} />
@@ -524,7 +524,7 @@ export default function StrategyPanel({ onStrategySaved }) {
 
           <button
             onClick={() => setShowNewModal(true)}
-            className="w-full py-1.5 bg-bgElevated hover:bg-bgHover text-gold border border-borderHairline rounded font-bold text-[10px] flex items-center justify-center gap-1 transition duration-150"
+            className="w-full py-1.5 bg-bgElevated hover:bg-bgHover text-gold rounded-md font-bold text-[10px] flex items-center justify-center gap-1 transition duration-150"
           >
             <Plus className="w-3 h-3" />
             <span>+ Create New Strategy</span>
@@ -536,11 +536,11 @@ export default function StrategyPanel({ onStrategySaved }) {
       <div className="w-[210px] flex-shrink-0 bg-bgElevated border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
         <div className="p-3 space-y-3">
           
-          {/* Integrated Sub-Sidebar Header (Issue 2 Fixed) */}
+          {/* Integrated Header */}
           <div className="border-b border-borderHairline pb-2.5">
             <h3 className="font-bold text-textPrimary text-sm truncate">{currentStrategy?.title}</h3>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-bgPanel text-textSecondary font-mono border border-borderHairline">
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-bgPanel text-textSecondary font-mono">
                 v{currentStrategy?.history?.length || 1}
               </span>
               <span className="text-[9px] text-textMuted font-mono">
@@ -562,10 +562,10 @@ export default function StrategyPanel({ onStrategySaved }) {
                     if (item.id === 'hud') fetchHUD();
                     if (item.id === 'backtest' && !backtestData) runBacktest();
                   }}
-                  className={`w-full p-2.5 rounded-lg text-left transition duration-150 flex items-center gap-2.5 ${
+                  className={`w-full p-2.5 rounded-md text-left transition duration-150 flex items-center gap-2.5 ${
                     isActive
-                      ? 'bg-bgPanel text-textPrimary font-bold shadow-sm'
-                      : 'text-textMuted hover:text-textPrimary hover:bg-bgPanel/50 border border-transparent'
+                      ? 'bg-bgPanel text-textPrimary font-bold'
+                      : 'text-textMuted hover:text-textPrimary hover:bg-bgPanel/50'
                   }`}
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? (item.color || 'text-gold') : 'text-textMuted'}`} />
@@ -579,12 +579,12 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* Delete Action with Safe Modal Trigger */}
+        {/* Delete Action Button */}
         <div className="p-3 border-t border-borderHairline bg-bgBase space-y-2">
           {strategies.length > 1 && (
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="w-full py-1.5 px-2 bg-down/10 hover:bg-down/20 text-down border border-down/30 rounded font-bold text-[10px] flex items-center justify-center gap-1.5 transition duration-150"
+              className="w-full py-1.5 px-2 bg-down/10 hover:bg-down/20 text-down rounded-md font-bold text-[10px] flex items-center justify-center gap-1.5 transition duration-150"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete This Strategy</span>
@@ -600,7 +600,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         <div className="h-11 px-4 bg-bgPanel border-b border-borderHairline flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-textPrimary uppercase">{currentStrategy?.title}</span>
-            <span className="text-[10px] text-gold px-2 py-0.5 rounded bg-gold/15 border border-gold/30 font-semibold">
+            <span className="text-[10px] text-gold px-2 py-0.5 rounded bg-gold/15 font-semibold">
               {SUB_NAV_ITEMS.find(n => n.id === activeSubTab)?.title}
             </span>
           </div>
@@ -608,12 +608,12 @@ export default function StrategyPanel({ onStrategySaved }) {
           <div className="flex items-center gap-2">
             {saveToast && (
               <span
-                className={`text-[10px] px-2.5 py-0.5 rounded font-bold border ${
+                className={`text-[10px] px-2.5 py-0.5 rounded font-bold ${
                   saveToast.type === 'success'
-                    ? 'bg-up/20 text-up border-up/30'
+                    ? 'bg-up/20 text-up'
                     : saveToast.type === 'warn'
-                    ? 'bg-gold/20 text-gold border-gold/30'
-                    : 'bg-down/20 text-down border-down/30'
+                    ? 'bg-gold/20 text-gold'
+                    : 'bg-down/20 text-down'
                 }`}
               >
                 {saveToast.text}
@@ -624,8 +624,8 @@ export default function StrategyPanel({ onStrategySaved }) {
             <button
               onClick={handleCompilePreview}
               disabled={compilingPreview}
-              className="h-7 px-3.5 bg-accent hover:bg-accentHover text-black font-bold rounded flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
-              title="Parse instructions and show full preview before going live"
+              className="h-7 px-3.5 bg-accent hover:bg-accentHover text-black font-bold rounded-md flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
+              title="Parse instructions and show preview before activating"
             >
               <Sparkles className={`w-3.5 h-3.5 ${compilingPreview ? 'animate-spin' : ''}`} />
               <span>{compilingPreview ? 'AI Parsing...' : 'Load Instructions & Compile'}</span>
@@ -635,7 +635,7 @@ export default function StrategyPanel({ onStrategySaved }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="h-7 px-3 bg-gold hover:bg-gold-hover text-black font-bold rounded flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
+              className="h-7 px-3 bg-gold hover:bg-gold-hover text-black font-bold rounded-md flex items-center gap-1.5 transition duration-150 shadow-sm disabled:opacity-50 text-[11px]"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{saving ? 'Saving...' : 'Save'}</span>
@@ -664,7 +664,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                   
                   <button
                     onClick={() => setShowExamples(!showExamples)}
-                    className="px-2.5 py-1 rounded bg-bgElevated hover:bg-bgHover text-gold border border-borderHairline text-[10px] font-bold flex items-center gap-1 transition duration-150"
+                    className="px-2.5 py-1 rounded bg-bgElevated hover:bg-bgHover text-gold text-[10px] font-bold flex items-center gap-1 transition duration-150"
                   >
                     <BookOpen className="w-3 h-3" />
                     <span>{showExamples ? 'Hide Examples' : 'Example Strategy Library'}</span>
@@ -674,9 +674,9 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                 {/* Collapsible Example Strategy Library */}
                 {showExamples && (
-                  <div className="p-3 bg-bgElevated border-b border-gold/30 grid grid-cols-3 gap-2 flex-shrink-0 animate-fadeIn">
+                  <div className="p-3 bg-bgElevated border-b border-borderHairline grid grid-cols-3 gap-2 flex-shrink-0 animate-fadeIn">
                     {EXAMPLE_STRATEGIES.map((ex, idx) => (
-                      <div key={idx} className="p-2.5 rounded-lg bg-bgPanel border border-borderHairline hover:border-gold/50 flex flex-col justify-between space-y-1.5 transition">
+                      <div key={idx} className="p-2.5 rounded-lg bg-bgPanel flex flex-col justify-between space-y-1.5 transition">
                         <div>
                           <div className="font-bold text-textPrimary text-[11px]">{ex.title}</div>
                           <div className="text-[9px] text-textMuted mt-0.5 leading-tight">{ex.desc}</div>
@@ -688,7 +688,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                             setShowExamples(false);
                             showToast(`Loaded "${ex.title}"`, 'success');
                           }}
-                          className="py-1 bg-gold/15 hover:bg-gold text-gold hover:text-black border border-gold/40 rounded text-[9px] font-bold flex items-center justify-center gap-1 transition duration-150"
+                          className="py-1 bg-gold/15 hover:bg-gold text-gold hover:text-black rounded text-[9px] font-bold flex items-center justify-center gap-1 transition duration-150"
                         >
                           <Copy className="w-2.5 h-2.5" />
                           <span>Load Template</span>
@@ -733,7 +733,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                   <button
                     onClick={handleTestOnMarket}
                     disabled={testing}
-                    className="h-6 px-3 bg-bgBase hover:bg-bgHover text-accent border border-accent/40 rounded font-bold flex items-center gap-1 text-[10px] transition duration-150 disabled:opacity-50"
+                    className="h-6 px-3 bg-bgBase hover:bg-bgHover text-accent rounded font-bold flex items-center gap-1 text-[10px] transition duration-150 disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3 h-3 ${testing ? 'animate-spin' : ''}`} />
                     <span>{testing ? 'Scanning...' : 'Test Now'}</span>
@@ -759,13 +759,13 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                   {!testing && testResult && (
                     <div className="space-y-2.5">
-                      <div className="p-2.5 rounded-lg bg-bgElevated border border-accent/30 text-accent font-bold text-[11px] flex items-center justify-between">
+                      <div className="p-2.5 rounded-lg bg-bgElevated text-accent font-bold text-[11px] flex items-center justify-between">
                         <span>Strategy Decision:</span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-black/40 text-textPrimary">
                           {testResult.trade_decision?.action || 'HOLD'}
                         </span>
                       </div>
-                      <div className="p-3 rounded-lg bg-bgPanel border border-borderHairline text-textPrimary text-[11px] leading-relaxed whitespace-pre-wrap font-sans">
+                      <div className="p-3 rounded-lg bg-bgPanel text-textPrimary text-[11px] leading-relaxed whitespace-pre-wrap font-sans">
                         {testResult.reply || testResult.thought_process}
                       </div>
                     </div>
@@ -775,11 +775,12 @@ export default function StrategyPanel({ onStrategySaved }) {
             </div>
           )}
 
-          {/* TAB 2: LIVE RULE CONFORMANCE */}
+          {/* TAB 2: LIVE RULE CONFORMANCE (Clean Flat Look, No Wireframe Outlines) */}
           {activeSubTab === 'hud' && (
             <div className="flex-1 flex flex-col p-4 bg-bgBase overflow-y-auto font-sans">
-              <div className="max-w-4xl mx-auto w-full space-y-4">
-                <div className="p-4 rounded-xl bg-bgPanel border border-up/30 shadow-lg flex items-center justify-between">
+              <div className="max-w-4xl mx-auto w-full space-y-3">
+                {/* Header Banner */}
+                <div className="p-4 rounded-xl bg-bgPanel flex items-center justify-between">
                   <div>
                     <div className="text-[11px] font-bold text-up uppercase tracking-wider flex items-center gap-1.5 mb-1">
                       <CheckCircle2 className="w-4 h-4 text-up" />
@@ -801,7 +802,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                     <button
                       onClick={fetchHUD}
                       disabled={hudLoading}
-                      className="h-8 px-3 bg-bgElevated hover:bg-bgHover text-up border border-up/30 rounded font-bold flex items-center gap-1 text-xs transition duration-150"
+                      className="h-8 px-3 bg-bgElevated hover:bg-bgHover text-up rounded font-bold flex items-center gap-1 text-xs transition duration-150"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${hudLoading ? 'animate-spin' : ''}`} />
                       <span>Refresh</span>
@@ -809,20 +810,20 @@ export default function StrategyPanel({ onStrategySaved }) {
                   </div>
                 </div>
 
-                {/* Rule Checklist */}
-                <div className="space-y-2.5">
+                {/* Rule Checklist Rows (Clean Solid Fills, No Outlines) */}
+                <div className="space-y-2">
                   {(hudData?.rules || []).map((r, i) => {
                     const isPass = r.status === 'PASS';
                     const isFail = r.status === 'FAIL';
                     return (
                       <div
                         key={i}
-                        className={`p-3.5 rounded-lg border transition flex items-start justify-between ${
+                        className={`p-3.5 rounded-lg transition flex items-start justify-between ${
                           isPass
-                            ? 'bg-bgElevated border-up/30'
+                            ? 'bg-bgElevated'
                             : isFail
-                            ? 'bg-bgElevated border-down/30'
-                            : 'bg-bgPanel border-borderHairline'
+                            ? 'bg-bgElevated'
+                            : 'bg-bgPanel'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -843,12 +844,12 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                         <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                               isPass
-                                ? 'bg-up/15 text-up border-up/30'
+                                ? 'bg-up/20 text-up'
                                 : isFail
-                                ? 'bg-down/15 text-down border-down/30'
-                                : 'bg-warn/15 text-warn border-warn/30'
+                                ? 'bg-down/20 text-down'
+                                : 'bg-warn/20 text-warn'
                             }`}
                           >
                             {r.status}
@@ -884,7 +885,7 @@ export default function StrategyPanel({ onStrategySaved }) {
               ) : (
                 <div className="max-w-4xl mx-auto w-full space-y-4 text-textSecondary">
                   {/* Header Card */}
-                  <div className="p-4 rounded-xl bg-bgPanel border border-accent/30 shadow-lg">
+                  <div className="p-4 rounded-xl bg-bgPanel">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-accent uppercase tracking-wider flex items-center gap-1.5">
                         <Cpu className="w-4 h-4" />
@@ -903,13 +904,13 @@ export default function StrategyPanel({ onStrategySaved }) {
                   {/* Grid of Rules */}
                   <div className="grid grid-cols-3 gap-3">
                     {/* Candlestick Triggers */}
-                    <div className="p-3.5 rounded-xl bg-bgElevated border border-borderHairline">
+                    <div className="p-3.5 rounded-xl bg-bgElevated">
                       <span className="text-[11px] font-bold text-up uppercase tracking-wider block mb-2">
                         Target Candle Patterns
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {(playbook.candle_patterns || []).map((c, i) => (
-                          <span key={i} className="px-2 py-1 rounded bg-up/15 text-up text-[10px] font-bold border border-up/30 font-mono">
+                          <span key={i} className="px-2 py-1 rounded bg-up/15 text-up text-[10px] font-bold font-mono">
                             {c.pattern || c} ({c.timeframe || '15m'})
                           </span>
                         ))}
@@ -917,7 +918,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </div>
 
                     {/* Indicators Used */}
-                    <div className="p-3.5 rounded-xl bg-bgElevated border border-borderHairline">
+                    <div className="p-3.5 rounded-xl bg-bgElevated">
                       <span className="text-[11px] font-bold text-gold uppercase tracking-wider block mb-2">
                         Indicators Used
                       </span>
@@ -931,7 +932,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </div>
 
                     {/* Safety Guardrails */}
-                    <div className="p-3.5 rounded-xl bg-bgElevated border border-borderHairline">
+                    <div className="p-3.5 rounded-xl bg-bgElevated">
                       <span className="text-[11px] font-bold text-accent uppercase tracking-wider block mb-2">
                         Safety Guardrails
                       </span>
@@ -947,7 +948,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                   </div>
 
                   {/* Risk Parameters */}
-                  <div className="p-3.5 rounded-xl bg-bgElevated border border-borderHairline">
+                  <div className="p-3.5 rounded-xl bg-bgElevated">
                     <span className="text-[11px] font-bold text-textPrimary uppercase tracking-wider block mb-2">
                       Risk & Position Sizing Parameters
                     </span>
@@ -981,7 +982,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           {activeSubTab === 'backtest' && (
             <div className="flex-1 flex flex-col p-4 bg-bgBase overflow-y-auto font-sans">
               <div className="max-w-4xl mx-auto w-full space-y-4">
-                <div className="p-4 rounded-xl bg-bgPanel border border-warn/30 shadow-lg flex items-center justify-between">
+                <div className="p-4 rounded-xl bg-bgPanel flex items-center justify-between">
                   <div>
                     <div className="text-[11px] font-bold text-warn uppercase tracking-wider flex items-center gap-1.5 mb-1">
                       <BarChart2 className="w-4 h-4 text-warn" />
@@ -1008,26 +1009,26 @@ export default function StrategyPanel({ onStrategySaved }) {
                 {backtestData && (
                   <div className="space-y-3 tabular-nums">
                     <div className="grid grid-cols-4 gap-3">
-                      <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+                      <div className="p-3 rounded-lg bg-bgElevated">
                         <span className="text-[10px] text-textMuted uppercase block">Win Rate</span>
                         <div className="text-2xl font-bold text-up">{backtestData.winRate}%</div>
                       </div>
-                      <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+                      <div className="p-3 rounded-lg bg-bgElevated">
                         <span className="text-[10px] text-textMuted uppercase block">Total Setups</span>
                         <div className="text-2xl font-bold text-textPrimary">{backtestData.totalTrades} Trades</div>
                       </div>
-                      <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+                      <div className="p-3 rounded-lg bg-bgElevated">
                         <span className="text-[10px] text-textMuted uppercase block">Profit Factor</span>
                         <div className="text-2xl font-bold text-gold">{backtestData.profitFactor}</div>
                       </div>
-                      <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+                      <div className="p-3 rounded-lg bg-bgElevated">
                         <span className="text-[10px] text-textMuted uppercase block">Average R:R</span>
                         <div className="text-2xl font-bold text-accent">1:{backtestData.averageRR}</div>
                       </div>
                     </div>
 
                     {/* AI Tuning Advice */}
-                    <div className="p-4 rounded-xl bg-bgElevated border border-borderHairline">
+                    <div className="p-4 rounded-xl bg-bgElevated">
                       <span className="text-xs font-bold text-gold uppercase tracking-wider block mb-2">
                         AI Parameter Tuning Recommendations
                       </span>
@@ -1050,7 +1051,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           {activeSubTab === 'history' && (
             <div className="flex-1 flex flex-col p-4 bg-bgBase overflow-y-auto font-sans">
               <div className="max-w-4xl mx-auto w-full space-y-4">
-                <div className="p-4 rounded-xl bg-bgPanel border border-accent/30 shadow-lg flex items-center justify-between">
+                <div className="p-4 rounded-xl bg-bgPanel flex items-center justify-between">
                   <div>
                     <div className="text-[11px] font-bold text-accent uppercase tracking-wider flex items-center gap-1.5 mb-1">
                       <History className="w-4 h-4 text-accent" />
@@ -1066,17 +1067,17 @@ export default function StrategyPanel({ onStrategySaved }) {
                 </div>
 
                 {historyList.length === 0 ? (
-                  <div className="p-8 text-center text-textMuted bg-bgElevated rounded-xl border border-borderHairline">
+                  <div className="p-8 text-center text-textMuted bg-bgElevated rounded-xl">
                     <History className="w-8 h-8 text-textMuted/40 mx-auto mb-2" />
                     <p className="text-xs">No past versions saved yet. Compile and activate a strategy to start recording history.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {historyList.map((ver, idx) => (
-                      <div key={idx} className="p-4 rounded-xl bg-bgElevated border border-borderHairline hover:border-accent/40 transition flex items-start justify-between">
+                      <div key={idx} className="p-4 rounded-xl bg-bgElevated transition flex items-start justify-between">
                         <div className="space-y-1.5 max-w-2xl">
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded bg-accent/15 text-accent font-bold text-[10px] border border-accent/30 font-mono">
+                            <span className="px-2 py-0.5 rounded bg-accent/15 text-accent font-bold text-[10px] font-mono">
                               Version #{ver.version}
                             </span>
                             <span className="font-bold text-textPrimary text-xs">{ver.title}</span>
@@ -1092,7 +1093,7 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                         <button
                           onClick={() => handleRollback(ver.version)}
-                          className="px-3 py-1.5 bg-bgPanel hover:bg-bgHover text-accent border border-accent/40 rounded font-bold text-[10px] flex items-center gap-1.5 transition duration-150"
+                          className="px-3 py-1.5 bg-bgPanel hover:bg-bgHover text-accent rounded font-bold text-[10px] flex items-center gap-1.5 transition duration-150"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           <span>Rollback to v{ver.version}</span>
@@ -1110,7 +1111,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* COMPILED STRATEGY PREVIEW & CONFIRMATION MODAL */}
       {showPreviewModal && previewSpec && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-bgPanel border border-gold/50 rounded-2xl p-6 w-full max-w-3xl space-y-4 shadow-2xl animate-fadeIn font-sans max-h-[90vh] overflow-y-auto">
+          <div className="bg-bgPanel rounded-2xl p-6 w-full max-w-3xl space-y-4 shadow-2xl animate-fadeIn font-sans max-h-[90vh] overflow-y-auto">
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-borderHairline pb-3">
@@ -1123,13 +1124,13 @@ export default function StrategyPanel({ onStrategySaved }) {
                   Preview What AI Understood Before Activating
                 </h2>
               </div>
-              <span className="text-[10px] px-2.5 py-1 rounded bg-gold/15 text-gold border border-gold/30 font-bold font-mono">
+              <span className="text-[10px] px-2.5 py-1 rounded bg-gold/15 text-gold font-bold font-mono">
                 CANDIDATE SPECIFICATION
               </span>
             </div>
 
-            {/* Plain-Language Restatement in Roman Urdu & English */}
-            <div className="p-4 rounded-xl bg-bgElevated border border-gold/30 space-y-1">
+            {/* Plain-Language Restatement */}
+            <div className="p-4 rounded-xl bg-bgElevated space-y-1">
               <span className="text-[10px] font-bold text-gold uppercase tracking-wider block">
                 🧠 Plain-Language AI Understanding:
               </span>
@@ -1140,7 +1141,7 @@ export default function StrategyPanel({ onStrategySaved }) {
 
             {/* Structured Specifications Grid */}
             <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+              <div className="p-3 rounded-lg bg-bgElevated">
                 <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Target Candles</span>
                 <div className="flex flex-wrap gap-1">
                   {(previewSpec.candle_patterns || []).map((c, i) => (
@@ -1151,7 +1152,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+              <div className="p-3 rounded-lg bg-bgElevated">
                 <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Indicators</span>
                 <div className="space-y-0.5 text-[10px]">
                   {(previewSpec.indicators || []).map((ind, i) => (
@@ -1162,7 +1163,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline">
+              <div className="p-3 rounded-lg bg-bgElevated">
                 <span className="text-[10px] text-textMuted uppercase font-bold block mb-1">Risk Parameters</span>
                 <div className="space-y-0.5 text-[10px] tabular-nums">
                   <div>Risk: <b className="text-gold">{previewSpec.risk_parameters?.risk_percent_per_trade || 1.0}%</b></div>
@@ -1174,7 +1175,7 @@ export default function StrategyPanel({ onStrategySaved }) {
 
             {/* Assumptions and Defaults Alert */}
             {((previewSpec.assumptions_made && previewSpec.assumptions_made.length > 0) || (previewSpec.defaults_used && previewSpec.defaults_used.length > 0)) && (
-              <div className="p-3 rounded-xl bg-warn/10 border border-warn/30 text-warn text-[11px] space-y-1">
+              <div className="p-3 rounded-xl bg-warn/10 text-warn text-[11px] space-y-1">
                 <div className="font-bold uppercase flex items-center gap-1.5 text-[10px]">
                   <AlertTriangle className="w-3.5 h-3.5 text-warn" />
                   Assumptions & Applied Defaults:
@@ -1210,7 +1211,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* DEDICATED DELETE CONFIRMATION MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-bgPanel border border-down/50 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl animate-fadeIn font-sans">
+          <div className="bg-bgPanel rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl animate-fadeIn font-sans">
             <div className="flex items-center gap-2.5 text-down">
               <AlertTriangle className="w-6 h-6 flex-shrink-0" />
               <h3 className="text-base font-bold text-white">Delete Strategy Confirmation</h3>
@@ -1221,7 +1222,7 @@ export default function StrategyPanel({ onStrategySaved }) {
             </p>
 
             {isCurrentActive && (
-              <div className="p-3 rounded-lg bg-down/15 border border-down/30 text-down text-xs space-y-1 font-bold">
+              <div className="p-3 rounded-lg bg-down/15 text-down text-xs space-y-1 font-bold">
                 <div>⚠️ CRITICAL WARNING:</div>
                 <div className="font-normal text-slate-200">
                   This strategy is currently <b>ACTIVE</b> and executing live trades. Deleting it will stop live bot operations on Exness MT5 immediately!
@@ -1252,7 +1253,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* NEW STRATEGY MODAL */}
       {showNewModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-bgPanel border border-gold/40 rounded-xl p-5 w-full max-w-md space-y-4 shadow-2xl font-sans">
+          <div className="bg-bgPanel rounded-xl p-5 w-full max-w-md space-y-4 shadow-2xl font-sans">
             <h3 className="text-sm font-bold text-gold uppercase flex items-center gap-2">
               <Plus className="w-4 h-4" />
               Create New Custom Trading Strategy
@@ -1264,7 +1265,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="e.g. 15m Hammer Scalper, Asian Sweep Breakout..."
-                className="w-full bg-bgElevated border border-borderHairline rounded p-2.5 text-xs text-textPrimary focus:outline-none"
+                className="w-full bg-bgElevated rounded p-2.5 text-xs text-textPrimary focus:outline-none"
                 autoFocus
               />
             </div>
