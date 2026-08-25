@@ -10,8 +10,9 @@ import {
   HelpCircle, ChevronDown, ChevronUp, Copy, ShieldAlert, Sparkle,
   Sliders, SlidersHorizontal, ArrowUpRight, ArrowDownRight, Folder,
   FileCode2, ShieldCheck, Target, CheckSquare, AlertCircle, Info,
-  Flame, Radio, GitFork, CornerDownRight, CheckCheck, PlayCircle
+  Flame, Radio, GitFork, CornerDownRight, CheckCheck, PlayCircle, Wrench
 } from 'lucide-react';
+import ActionsToolsPanel from './ActionsToolsPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -412,6 +413,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     { id: 'editor', title: 'Strategy Editor', subtitle: 'Write rules & live test', icon: FileText },
     { id: 'hud', title: 'Live Rule Conformance', subtitle: 'Real-time rule matrix', icon: CheckCircle2, color: 'text-up' },
     { id: 'playbook', title: 'Operational Mandate', subtitle: 'Compiled AI playbook', icon: BookOpen, color: 'text-accent' },
+    { id: 'tools', title: 'Actions & Tools', subtitle: 'Full registry & test console', icon: Wrench, color: 'text-gold' },
     { id: 'backtest', title: 'MT5 Backtest & Tuning', subtitle: 'Historical simulation', icon: BarChart2, color: 'text-warn' },
     { id: 'history', title: 'Version History', subtitle: 'Audit log & rollback', icon: History, color: 'text-accent' },
   ];
@@ -987,7 +989,12 @@ export default function StrategyPanel({ onStrategySaved }) {
             </div>
           )}
 
-          {/* TAB 4: MT5 BACKTEST & TUNING */}
+          {/* TAB 4: ACTIONS & TOOLS MANUAL TEST CONSOLE */}
+          {activeSubTab === 'tools' && (
+            <ActionsToolsPanel currentStrategy={currentStrategy} />
+          )}
+
+          {/* TAB 5: MT5 BACKTEST & TUNING */}
           {activeSubTab === 'backtest' && (
             <div className="flex-1 flex flex-col p-4 bg-bgBase overflow-y-auto font-sans">
               <div className="max-w-4xl mx-auto w-full space-y-4">
