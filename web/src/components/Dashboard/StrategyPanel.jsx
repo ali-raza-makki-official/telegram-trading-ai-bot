@@ -60,13 +60,13 @@ export default function StrategyPanel({ onStrategySaved }) {
   // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'backtest' | 'history'
   const [activeSubTab, setActiveSubTab] = useState('editor');
 
-  // Preview Confirmation Modal State (Point 1)
+  // Preview Confirmation Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewSpec, setPreviewSpec] = useState(null);
   const [compilingPreview, setCompilingPreview] = useState(false);
   const [activating, setActivating] = useState(false);
 
-  // Delete Confirmation Modal State (Point 4)
+  // Delete Confirmation Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -208,7 +208,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   };
 
-  // Point 1: "Load Instructions & Compile" -> Triggers PREVIEW Modal before going live
+  // Compile Preview Trigger
   const handleCompilePreview = async () => {
     if (!instructions.trim()) {
       showToast('Please write strategy instructions first', 'warn');
@@ -231,7 +231,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           return;
         }
         setPreviewSpec(data.previewSpec);
-        setShowPreviewModal(true); // Open confirmation modal
+        setShowPreviewModal(true);
       } else {
         showToast('Compilation error', 'error');
       }
@@ -242,7 +242,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   };
 
-  // Point 1: Explicit User Confirmation -> Activates and saves to version history
+  // Confirm & Activate Trigger
   const handleConfirmActivate = async () => {
     if (!currentStrategy || !previewSpec) return;
     setActivating(true);
@@ -259,7 +259,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       });
       if (res.ok) {
         setShowPreviewModal(false);
-        showToast(`"${previewSpec.title}" is now LIVE 24/7!`, 'success');
+        showToast(`"${previewSpec.title}" is now LIVE 24/7`, 'success');
         setActiveSubTab('playbook');
         await fetchStrategies(currentStrategy.id);
       } else {
@@ -272,7 +272,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   };
 
-  // Point 4: Safe Delete Execution after confirmation
+  // Delete Strategy
   const handleConfirmDelete = async () => {
     if (!currentStrategy || strategies.length <= 1) return;
     setDeleting(true);
@@ -329,7 +329,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       });
       if (res.ok) {
         setActiveId(currentStrategy.id);
-        showToast(`"${currentStrategy.title}" is now ACTIVE 24/7!`, 'success');
+        showToast(`"${currentStrategy.title}" is now ACTIVE 24/7`, 'success');
       }
     } catch (e) {
       showToast('Error: ' + e.message, 'error');
@@ -399,27 +399,26 @@ export default function StrategyPanel({ onStrategySaved }) {
   const wordCount = instructions.trim() ? instructions.trim().split(/\s+/).length : 0;
   const ruleCount = (instructions.match(/^[ \t]*[-*•\d+.]/gm) || []).length;
 
-  // Point 6: Non-sequential, functional navigation names without confusing 1-5 numbering
   const SUB_NAV_ITEMS = [
-    { id: 'editor', title: 'Strategy Editor', subtitle: 'Write rules & live market test', icon: FileText },
-    { id: 'hud', title: 'Live Rule Conformance', subtitle: 'Real-time rule checklist', icon: CheckCircle2, color: 'text-up' },
-    { id: 'playbook', title: 'Operational Mandate', subtitle: 'Compiled AI playbook logic', icon: BookOpen, color: 'text-accent' },
-    { id: 'backtest', title: 'MT5 Backtest & Tuning', subtitle: 'Historical candle simulation', icon: BarChart2, color: 'text-warn' },
-    { id: 'history', title: 'Version History', subtitle: 'Audit log & 1-click rollback', icon: History, color: 'text-accent' },
+    { id: 'editor', title: 'Strategy Editor', subtitle: 'Write rules & live test', icon: FileText },
+    { id: 'hud', title: 'Live Rule Conformance', subtitle: 'Real-time rule matrix', icon: CheckCircle2, color: 'text-up' },
+    { id: 'playbook', title: 'Operational Mandate', subtitle: 'Compiled AI playbook', icon: BookOpen, color: 'text-accent' },
+    { id: 'backtest', title: 'MT5 Backtest & Tuning', subtitle: 'Historical simulation', icon: BarChart2, color: 'text-warn' },
+    { id: 'history', title: 'Version History', subtitle: 'Audit log & rollback', icon: History, color: 'text-accent' },
   ];
 
   return (
     <div className="flex-1 flex h-full bg-bgBase text-textPrimary font-mono text-xs overflow-hidden select-none">
 
-      {/* TIER 1: PRIMARY LEFT SIDEBAR — STRATEGY REPOSITORY (Width: 220px) */}
+      {/* TIER 1: PRIMARY LEFT SIDEBAR (Width: 220px) */}
       <div className="w-[220px] flex-shrink-0 bg-bgPanel border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
         <div className="p-3 space-y-2.5">
           
-          {/* Point 2: Header with Explicit Single Active Engine Notice */}
+          {/* Integrated Header (Issue 2 Fixed) */}
           <div className="flex items-center justify-between border-b border-borderHairline pb-2">
-            <div className="flex items-center gap-1.5 font-bold text-gold">
-              <Cpu className="w-4 h-4 text-gold" />
-              <span className="text-[11px] tracking-wider font-extrabold">STRATEGIES</span>
+            <div className="flex items-center gap-1.5 font-bold text-textSecondary text-[10px] uppercase tracking-wider">
+              <Cpu className="w-3.5 h-3.5 text-gold" />
+              <span>Strategies</span>
             </div>
             <button
               onClick={() => setShowNewModal(true)}
@@ -430,29 +429,27 @@ export default function StrategyPanel({ onStrategySaved }) {
             </button>
           </div>
 
-          {/* Point 2: Explicit Single Strategy Limitation Notice */}
+          {/* Single Strategy Notice */}
           <div className="p-2 rounded bg-bgElevated border border-borderHairline text-[9px] text-textSecondary leading-snug flex items-start gap-1.5">
             <Info className="w-3 h-3 text-gold flex-shrink-0 mt-0.5" />
-            <span><b>Single-Engine Mode:</b> 1 strategy runs live at a time. Switching will deactivate the current active strategy.</span>
+            <span><b>Single-Engine Mode:</b> 1 strategy active at a time. Switching auto-switches live execution.</span>
           </div>
 
-          {/* Point 5: Strategy List with Performance / Win-Rate Badges */}
+          {/* Clean Selected Strategy Cards (No Double Borders) */}
           <div className="space-y-1.5">
-            <span className="text-[8px] uppercase font-bold text-textMuted block px-1">Your Strategy Portfolio:</span>
             {strategies.map((strat) => {
               const isSelected = currentStrategy?.id === strat.id;
               const isActive247 = activeId === strat.id;
               const winRate = strat.compiledPlaybook ? '64.2%' : 'Untested';
-              const profitFactor = strat.compiledPlaybook ? '1.85 PF' : '';
 
               return (
                 <button
                   key={strat.id}
                   onClick={() => handleSelectStrategy(strat)}
-                  className={`w-full p-2.5 rounded-lg text-left transition duration-150 border flex flex-col justify-between space-y-1.5 ${
+                  className={`w-full p-2.5 rounded-lg text-left transition duration-150 flex flex-col justify-between space-y-1.5 ${
                     isSelected
-                      ? 'bg-gold/15 text-gold border-gold/40 font-bold shadow-sm'
-                      : 'bg-bgElevated text-textMuted hover:text-textPrimary border-borderHairline hover:border-white/15'
+                      ? 'bg-bgElevated text-gold border-l-2 border-l-gold border-y-transparent border-r-transparent font-bold shadow-sm'
+                      : 'bg-bgElevated/50 text-textMuted hover:text-textPrimary hover:bg-bgElevated border border-transparent'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -462,7 +459,6 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </span>
                   </div>
 
-                  {/* Point 5: Performance Metric Tile on Strategy Card */}
                   <div className="flex items-center justify-between text-[9px] tabular-nums">
                     <div className="flex items-center gap-1.5">
                       <span className="px-1 py-0.2 rounded bg-black/40 text-textSecondary font-mono">15m</span>
@@ -489,17 +485,16 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* Point 7: Unified "Live Execution Controller" Card Grouping 24/7 & Mode */}
+        {/* Live Execution Controller Card (Issue 7 Fixed) */}
         <div className="p-3 border-t border-borderHairline bg-bgBase space-y-2">
           <div className="p-2.5 rounded-lg bg-bgElevated border border-borderHairline space-y-2">
             <div className="flex items-center justify-between text-[9px] uppercase font-bold text-textMuted">
-              <span>Live Engine Status</span>
+              <span>Live Engine</span>
               <span className={isCurrentActive ? 'text-up font-bold' : 'text-textMuted'}>
                 {isCurrentActive ? 'RUNNING' : 'IDLE'}
               </span>
             </div>
 
-            {/* 24/7 Active Trigger Button */}
             <button
               onClick={handleSetActive}
               className={`w-full py-1.5 px-2 rounded font-bold text-[10px] flex items-center justify-center gap-1.5 transition duration-150 border ${
@@ -509,10 +504,9 @@ export default function StrategyPanel({ onStrategySaved }) {
               }`}
             >
               {isCurrentActive ? <ToggleRight className="w-4 h-4 text-up" /> : <ToggleLeft className="w-4 h-4" />}
-              <span>{isCurrentActive ? '🟢 24/7 SCANNING: ON' : 'ACTIVATE FOR 24/7'}</span>
+              <span>{isCurrentActive ? '24/7 SCANNING: ON' : 'ACTIVATE FOR 24/7'}</span>
             </button>
 
-            {/* Execution Mode Badge */}
             <div className={`p-1.5 rounded text-center text-[9px] font-bold border ${
               executionMode === 'auto_execute'
                 ? 'bg-up/15 text-up border-up/30'
@@ -523,14 +517,14 @@ export default function StrategyPanel({ onStrategySaved }) {
                 <span>{executionMode === 'auto_execute' ? 'AUTO-EXECUTE (REAL TRADES)' : 'WATCH-ONLY (ALERTS)'}</span>
               </div>
               <p className="text-[8px] opacity-75 mt-0.5 font-normal">
-                {executionMode === 'auto_execute' ? 'Auto-places trades on Exness MT5 on rule match' : 'Generates alerts only, no real orders placed'}
+                {executionMode === 'auto_execute' ? 'Auto-places orders on Exness MT5' : 'Generates alerts only'}
               </p>
             </div>
           </div>
 
           <button
             onClick={() => setShowNewModal(true)}
-            className="w-full py-1.5 bg-bgElevated hover:bg-bgHover text-gold border border-gold/30 rounded font-bold text-[10px] flex items-center justify-center gap-1 transition duration-150"
+            className="w-full py-1.5 bg-bgElevated hover:bg-bgHover text-gold border border-borderHairline rounded font-bold text-[10px] flex items-center justify-center gap-1 transition duration-150"
           >
             <Plus className="w-3 h-3" />
             <span>+ Create New Strategy</span>
@@ -538,14 +532,13 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       </div>
 
-      {/* TIER 2: SECONDARY SUB-SIDEBAR — CURRENT STRATEGY WORKSPACE (Width: 210px) */}
+      {/* TIER 2: SECONDARY SUB-SIDEBAR (Width: 210px) */}
       <div className="w-[210px] flex-shrink-0 bg-bgElevated border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
         <div className="p-3 space-y-3">
           
-          {/* Point 3: Clean Strategy Header showing just the Strategy Name prominently (no "STRATEGY CONTROL" label) */}
+          {/* Integrated Sub-Sidebar Header (Issue 2 Fixed) */}
           <div className="border-b border-borderHairline pb-2.5">
-            <span className="text-[9px] uppercase font-bold text-textMuted tracking-wider block">SELECTED STRATEGY</span>
-            <h3 className="font-bold text-textPrimary text-sm truncate mt-0.5">{currentStrategy?.title}</h3>
+            <h3 className="font-bold text-textPrimary text-sm truncate">{currentStrategy?.title}</h3>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-bgPanel text-textSecondary font-mono border border-borderHairline">
                 v{currentStrategy?.history?.length || 1}
@@ -556,9 +549,8 @@ export default function StrategyPanel({ onStrategySaved }) {
             </div>
           </div>
 
-          {/* Point 6: Non-Sequential Clean Section Navigation */}
+          {/* Clean Functional Navigation */}
           <div className="space-y-1">
-            <span className="text-[8px] uppercase font-bold text-textMuted block px-1 mb-1">Navigation:</span>
             {SUB_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeSubTab === item.id;
@@ -572,8 +564,8 @@ export default function StrategyPanel({ onStrategySaved }) {
                   }}
                   className={`w-full p-2.5 rounded-lg text-left transition duration-150 flex items-center gap-2.5 ${
                     isActive
-                      ? 'bg-bgPanel text-textPrimary border border-gold/40 shadow-sm font-bold'
-                      : 'text-textMuted hover:text-textPrimary hover:bg-bgPanel border border-transparent'
+                      ? 'bg-bgPanel text-textPrimary font-bold shadow-sm'
+                      : 'text-textMuted hover:text-textPrimary hover:bg-bgPanel/50 border border-transparent'
                   }`}
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? (item.color || 'text-gold') : 'text-textMuted'}`} />
@@ -587,7 +579,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* Sub-Sidebar Safe Actions (Point 4) */}
+        {/* Delete Action with Safe Modal Trigger */}
         <div className="p-3 border-t border-borderHairline bg-bgBase space-y-2">
           {strategies.length > 1 && (
             <button
@@ -604,7 +596,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* TIER 3: MAIN CONTENT WORKSPACE */}
       <div className="flex-1 flex flex-col overflow-hidden bg-bgBase">
 
-        {/* Top Header Bar */}
+        {/* Top Header Bar (No Stray Outlines) */}
         <div className="h-11 px-4 bg-bgPanel border-b border-borderHairline flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-textPrimary uppercase">{currentStrategy?.title}</span>
@@ -628,7 +620,7 @@ export default function StrategyPanel({ onStrategySaved }) {
               </span>
             )}
 
-            {/* Point 1: Load Instructions & Compile Action -> Opens Preview Modal */}
+            {/* Load Instructions & Compile Action */}
             <button
               onClick={handleCompilePreview}
               disabled={compilingPreview}
@@ -636,7 +628,7 @@ export default function StrategyPanel({ onStrategySaved }) {
               title="Parse instructions and show full preview before going live"
             >
               <Sparkles className={`w-3.5 h-3.5 ${compilingPreview ? 'animate-spin' : ''}`} />
-              <span>{compilingPreview ? 'AI Parsing...' : '⚡ Load Instructions & Compile'}</span>
+              <span>{compilingPreview ? 'AI Parsing...' : 'Load Instructions & Compile'}</span>
             </button>
 
             {/* Save Raw Instructions Button */}
@@ -667,7 +659,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Strategy Title..."
-                    className="bg-transparent font-bold text-textPrimary text-sm focus:outline-none focus:ring-1 focus:ring-gold/40 px-2 py-0.5 rounded w-1/2"
+                    className="bg-transparent font-bold text-textPrimary text-sm focus:outline-none px-2 py-0.5 rounded w-1/2"
                   />
                   
                   <button
@@ -675,7 +667,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                     className="px-2.5 py-1 rounded bg-bgElevated hover:bg-bgHover text-gold border border-borderHairline text-[10px] font-bold flex items-center gap-1 transition duration-150"
                   >
                     <BookOpen className="w-3 h-3" />
-                    <span>{showExamples ? 'Hide Examples' : '📖 Example Strategy Library'}</span>
+                    <span>{showExamples ? 'Hide Examples' : 'Example Strategy Library'}</span>
                     {showExamples ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>
                 </div>
@@ -711,12 +703,12 @@ export default function StrategyPanel({ onStrategySaved }) {
                   ref={textareaRef}
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Write your custom trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Examples:&#10;1. 15m timeframe pe jab Hammer ya Bullish Engulfing candle bane aur RSI 38 se kam ho to BUY trade lo.&#10;2. Stop Loss candle wick ke 2 pips neechay rakho aur target 1:2.5 Risk to Reward.&#10;3. London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;4. Click '⚡ Load Instructions & Compile' to preview what the AI understood before activating."
-                  className="flex-1 p-4 bg-transparent text-textPrimary font-mono text-[12px] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-gold/30 selection:bg-gold/20"
+                  placeholder="Write your custom trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Examples:&#10;1. 15m timeframe pe jab Hammer ya Bullish Engulfing candle bane aur RSI 38 se kam ho to BUY trade lo.&#10;2. Stop Loss candle wick ke 2 pips neechay rakho aur target 1:2.5 Risk to Reward.&#10;3. London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;4. Click 'Load Instructions & Compile' to preview what the AI understood before activating."
+                  className="flex-1 p-4 bg-transparent text-textPrimary font-mono text-[12px] leading-relaxed resize-none focus:outline-none selection:bg-gold/20"
                   spellCheck="false"
                 />
 
-                {/* Inline Guidance & Metrics Bar directly below Textarea */}
+                {/* Inline Guidance & Metrics Bar */}
                 <div className="p-2 px-3 bg-bgPanel border-t border-borderHairline flex items-center justify-between text-[10px] text-textMuted flex-shrink-0 tabular-nums">
                   <div className="flex items-center gap-2">
                     <HelpCircle className="w-3 h-3 text-accent" />
@@ -878,7 +870,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                   <BookOpen className="w-12 h-12 text-gold/40 mb-3" />
                   <h3 className="text-textPrimary font-bold text-sm mb-1">Playbook Not Yet Compiled</h3>
                   <p className="text-[11px] max-w-md mb-4 text-textMuted">
-                    Click <b>&quot;⚡ Load Instructions & Compile&quot;</b> to compile your instructions into a structured operational playbook.
+                    Click <b>&quot;Load Instructions & Compile&quot;</b> to compile your instructions into a structured operational playbook.
                   </p>
                   <button
                     onClick={handleCompilePreview}
@@ -1115,7 +1107,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       </div>
 
-      {/* Point 1: COMPILED STRATEGY PREVIEW & CONFIRMATION MODAL */}
+      {/* COMPILED STRATEGY PREVIEW & CONFIRMATION MODAL */}
       {showPreviewModal && previewSpec && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-bgPanel border border-gold/50 rounded-2xl p-6 w-full max-w-3xl space-y-4 shadow-2xl animate-fadeIn font-sans max-h-[90vh] overflow-y-auto">
@@ -1215,7 +1207,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       )}
 
-      {/* Point 4: DEDICATED DELETE CONFIRMATION MODAL */}
+      {/* DEDICATED DELETE CONFIRMATION MODAL */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-bgPanel border border-down/50 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl animate-fadeIn font-sans">
@@ -1272,7 +1264,7 @@ export default function StrategyPanel({ onStrategySaved }) {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="e.g. 15m Hammer Scalper, Asian Sweep Breakout..."
-                className="w-full bg-bgElevated border border-borderHairline rounded p-2.5 text-xs text-textPrimary focus:outline-none focus:ring-1 focus:ring-gold"
+                className="w-full bg-bgElevated border border-borderHairline rounded p-2.5 text-xs text-textPrimary focus:outline-none"
                 autoFocus
               />
             </div>
