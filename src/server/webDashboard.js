@@ -1039,44 +1039,50 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8d. Serve Next.js static build from /dashboard/
-  if (pathname.startsWith('/dashboard/') || pathname === '/dashboard') {
-    const fs = require('fs');
-    const pathMod = require('path');
-    const webBuildDir = pathMod.resolve(process.cwd(), 'web', 'out');
-    // Strip /dashboard prefix to get the relative path in the build
-    let relativePath = pathname.replace(/^\/dashboard\/?/, '/');
-    if (relativePath === '/' || relativePath === '') relativePath = '/index.html';
-    let filePath = pathMod.join(webBuildDir, relativePath);
-    // If path doesn't exist, serve index.html (SPA fallback)
-    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-      filePath = pathMod.join(webBuildDir, 'index.html');
-    }
-    if (fs.existsSync(filePath)) {
-      const ext = pathMod.extname(filePath);
-      const mimeTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.ico': 'image/x-icon' };
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
-      fs.createReadStream(filePath).pipe(res);
-      return;
-    }
+  // 8d. Serve Main Next.js React Frontend (Static Build from web/out/)
+  const fs = require('fs');
+  const pathMod = require('path');
+  const webBuildDir = pathMod.resolve(process.cwd(), 'web', 'out');
+
+  let requestedFile = pathname;
+  if (requestedFile === '/' || requestedFile === '/dashboard' || requestedFile === '/dashboard/') {
+    requestedFile = '/index.html';
+  } else if (requestedFile.startsWith('/dashboard/')) {
+    requestedFile = requestedFile.replace(/^\/dashboard\/?/, '/');
   }
 
-  // 8e. Serve _next static assets (JS/CSS chunks)
-  if (pathname.startsWith('/_next/')) {
-    const fs = require('fs');
-    const pathMod = require('path');
-    const webBuildDir = pathMod.resolve(process.cwd(), 'web', 'out');
-    const filePath = pathMod.join(webBuildDir, pathname);
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      const ext = pathMod.extname(filePath);
-      const mimeTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
-      fs.createReadStream(filePath).pipe(res);
-      return;
-    }
+  let filePath = pathMod.join(webBuildDir, requestedFile);
+
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    const ext = pathMod.extname(filePath);
+    const mimeTypes = {
+      '.html': 'text/html',
+      '.js': 'application/javascript',
+      '.css': 'text/css',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.txt': 'text/plain',
+      '.ico': 'image/x-icon',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf': 'font/ttf'
+    };
+    res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+    fs.createReadStream(filePath).pipe(res);
+    return;
   }
 
-  // 9. Default: Render Real-Time Terminal Web Dashboard HTML
+  // SPA Fallback: If static React build has index.html, serve it for client-side routing
+  const fallbackIndex = pathMod.join(webBuildDir, 'index.html');
+  if (fs.existsSync(fallbackIndex)) {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    fs.createReadStream(fallbackIndex).pipe(res);
+    return;
+  }
+
+  // 9. Final Fallback: Embedded HTML if React static build is absent
   res.writeHead(200, { 'Content-Type': 'text/html' });
   res.end(getDashboardHtml());
 }
