@@ -8,7 +8,7 @@ import {
   Activity, Zap, Compass, BarChart2, Play, Award, CheckCircle,
   XCircle, Code2, Terminal, Flame, TrendingUp, History, RotateCcw,
   HelpCircle, ChevronDown, ChevronUp, Copy, ShieldAlert, Sparkle,
-  Settings2, Sliders, CheckSquare, ListFilter
+  Settings2, Sliders, CheckSquare, ListFilter, Folder, ChevronLeft
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -55,7 +55,7 @@ export default function StrategyPanel({ onStrategySaved }) {
   const [instructions, setInstructions] = useState('');
   const [title, setTitle] = useState('');
 
-  // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'backtest' | 'history'
+  // Sub-tabs for the selected strategy: 'editor' | 'hud' | 'playbook' | 'backtest' | 'history'
   const [activeSubTab, setActiveSubTab] = useState('editor');
 
   // Preview Confirmation Modal State (High Priority)
@@ -374,7 +374,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     return (
       <div className="flex items-center justify-center h-full bg-[#0B0E14] text-textMuted font-mono text-xs">
         <RefreshCw className="w-5 h-5 animate-spin text-gold mr-2" />
-        <span>Loading Universal Dynamic Strategy Engine...</span>
+        <span>Loading Two-Tier Strategy Hub...</span>
       </div>
     );
   }
@@ -388,7 +388,7 @@ export default function StrategyPanel({ onStrategySaved }) {
   const wordCount = instructions.trim() ? instructions.trim().split(/\s+/).length : 0;
   const ruleCount = (instructions.match(/^[ \t]*[-*•\d+.]/gm) || []).length;
 
-  const NAV_ITEMS = [
+  const SUB_NAV_ITEMS = [
     { id: 'editor', title: '1. Write Strategy', subtitle: 'Prompt & Live Testing', icon: FileText },
     { id: 'hud', title: '2. Live Status', subtitle: 'Real-time rule matrix', icon: CheckCircle2, color: 'text-up' },
     { id: 'playbook', title: '3. How AI Behaves', subtitle: 'Compiled playbook logic', icon: BookOpen, color: 'text-accent' },
@@ -399,30 +399,26 @@ export default function StrategyPanel({ onStrategySaved }) {
   return (
     <div className="flex-1 flex h-full bg-[#090C12] text-textPrimary font-mono text-xs overflow-hidden select-none">
 
-      {/* LEFT SUB-SIDEBAR NAVIGATION (Width: 230px) */}
-      <div className="w-[230px] flex-shrink-0 bg-[#0C101A] border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
-        
-        {/* Top: Strategy Selection & Status */}
+      {/* TIER 1: PRIMARY LEFT SIDEBAR — STRATEGY REPOSITORY (Width: 200px) */}
+      <div className="w-[200px] flex-shrink-0 bg-[#0A0D15] border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
         <div className="p-3 space-y-3">
-          {/* Header Label */}
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-borderHairline pb-2">
             <div className="flex items-center gap-1.5 font-bold text-gold">
               <Cpu className="w-4 h-4 text-gold animate-pulse" />
-              <span className="text-[11px] tracking-wider">STRATEGY HUB</span>
+              <span className="text-[11px] tracking-wider">STRATEGIES</span>
             </div>
             <button
               onClick={() => setShowNewModal(true)}
-              className="px-2 py-0.5 bg-[#171E2E] hover:bg-[#20293D] text-gold border border-gold/40 rounded font-bold flex items-center gap-1 transition text-[9px]"
+              className="p-1 bg-[#171E2E] hover:bg-[#20293D] text-gold border border-gold/40 rounded transition"
               title="Create New Strategy"
             >
-              <Plus className="w-3 h-3" />
-              <span>NEW</span>
+              <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Strategy Selection List */}
-          <div className="space-y-1">
-            <span className="text-[9px] uppercase font-bold text-textMuted block px-1">Your Strategies:</span>
+          {/* Strategies List */}
+          <div className="space-y-1.5">
             {strategies.map((strat) => {
               const isSelected = currentStrategy?.id === strat.id;
               const isActive247 = activeId === strat.id;
@@ -430,41 +426,76 @@ export default function StrategyPanel({ onStrategySaved }) {
                 <button
                   key={strat.id}
                   onClick={() => handleSelectStrategy(strat)}
-                  className={`w-full p-2 rounded-lg text-left transition border flex items-center justify-between ${
+                  className={`w-full p-2.5 rounded-lg text-left transition border flex flex-col justify-between space-y-1 ${
                     isSelected
-                      ? 'bg-gold/15 text-gold border-gold/40 font-bold shadow-sm'
+                      ? 'bg-gold/15 text-gold border-gold/40 font-bold shadow-md'
                       : 'bg-[#121724] text-textMuted hover:text-white border-white/5 hover:border-white/15'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 truncate">
-                    {isActive247 && <span className="w-1.5 h-1.5 rounded-full bg-up animate-ping flex-shrink-0" />}
-                    <span className="truncate text-[11px]">{strat.title}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="truncate text-[11px] font-bold">{strat.title}</span>
+                    <span className="text-[8px] px-1 rounded bg-black/50 text-textMuted font-mono">
+                      v{strat.history?.length || 1}
+                    </span>
                   </div>
-                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-black/40 text-textMuted font-mono">
-                    v{strat.history?.length || 1}
-                  </span>
+
+                  <div className="flex items-center justify-between text-[9px]">
+                    {isActive247 ? (
+                      <span className="text-up font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-up animate-ping" />
+                        ACTIVE 24/7
+                      </span>
+                    ) : (
+                      <span className="text-textMuted">STANDBY</span>
+                    )}
+                    <span className="text-[8px] opacity-70">
+                      {strat.instructions?.length || 0} chars
+                    </span>
+                  </div>
                 </button>
               );
             })}
           </div>
+        </div>
 
-          {/* Persistent Strategy Status Badge */}
+        {/* Bottom Sidebar: Mode Badge & Quick New Button */}
+        <div className="p-3 border-t border-borderHairline bg-[#080A10] space-y-2">
           <div className={`p-2 rounded-lg border text-center ${
             executionMode === 'auto_execute'
               ? 'bg-up/15 text-up border-up/30'
               : 'bg-yellow-400/15 text-yellow-400 border-yellow-400/30'
           }`}>
-            <span className="text-[9px] uppercase block opacity-80">Execution Mode</span>
-            <span className="font-bold text-[10px] flex items-center justify-center gap-1 mt-0.5">
-              <span className={`w-2 h-2 rounded-full ${executionMode === 'auto_execute' ? 'bg-up animate-pulse' : 'bg-yellow-400'}`} />
-              {executionMode === 'auto_execute' ? 'AUTO-EXECUTE (REAL TRADES)' : 'WATCH-ONLY (ALERTS)'}
+            <span className="text-[8px] uppercase block opacity-80">Execution Mode</span>
+            <span className="font-bold text-[9px] flex items-center justify-center gap-1 mt-0.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'auto_execute' ? 'bg-up animate-pulse' : 'bg-yellow-400'}`} />
+              {executionMode === 'auto_execute' ? 'AUTO-EXECUTE' : 'WATCH-ONLY'}
             </span>
           </div>
 
-          {/* Navigation Sub-Tabs in Left Sidebar */}
-          <div className="pt-2 border-t border-borderHairline space-y-1">
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="w-full py-1.5 bg-[#141A28] hover:bg-[#1E253A] text-gold border border-gold/30 rounded font-bold text-[10px] flex items-center justify-center gap-1 transition"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ New Strategy</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TIER 2: SECONDARY SUB-SIDEBAR — ACCORDING TO SELECTED STRATEGY (Width: 210px) */}
+      <div className="w-[210px] flex-shrink-0 bg-[#0E131F] border-r border-borderHairline flex flex-col justify-between overflow-y-auto">
+        <div className="p-3 space-y-3">
+          {/* Sub-Sidebar Header for Current Strategy */}
+          <div className="border-b border-borderHairline pb-2">
+            <span className="text-[9px] uppercase font-bold text-accent tracking-wider block">STRATEGY CONTROL:</span>
+            <h3 className="font-bold text-white text-xs truncate mt-0.5">{currentStrategy?.title}</h3>
+            <span className="text-[9px] text-textMuted block">v{currentStrategy?.history?.length || 1} • {currentStrategy?.updatedAt ? new Date(currentStrategy.updatedAt).toLocaleTimeString() : 'Draft'}</span>
+          </div>
+
+          {/* Sub-Sidebar Navigation Menu */}
+          <div className="space-y-1">
             <span className="text-[9px] uppercase font-bold text-textMuted block px-1 mb-1">Sections:</span>
-            {NAV_ITEMS.map((item) => {
+            {SUB_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeSubTab === item.id;
               return (
@@ -475,15 +506,15 @@ export default function StrategyPanel({ onStrategySaved }) {
                     if (item.id === 'hud') fetchHUD();
                     if (item.id === 'backtest' && !backtestData) runBacktest();
                   }}
-                  className={`w-full p-2 rounded-lg text-left transition flex items-center gap-2.5 ${
+                  className={`w-full p-2.5 rounded-lg text-left transition flex items-center gap-2.5 ${
                     isActive
-                      ? 'bg-[#182032] text-white border border-gold/40 shadow-sm'
-                      : 'text-textMuted hover:text-slate-200 hover:bg-[#121622] border border-transparent'
+                      ? 'bg-[#182032] text-white border border-gold/40 shadow-sm font-bold'
+                      : 'text-textMuted hover:text-slate-200 hover:bg-[#121725] border border-transparent'
                   }`}
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? (item.color || 'text-gold') : 'text-textMuted'}`} />
                   <div className="truncate">
-                    <div className={`text-[11px] font-bold ${isActive ? 'text-white' : ''}`}>{item.title}</div>
+                    <div className={`text-[11px] ${isActive ? 'text-white' : ''}`}>{item.title}</div>
                     <div className="text-[8px] text-textMuted leading-tight">{item.subtitle}</div>
                   </div>
                 </button>
@@ -492,8 +523,8 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* Bottom Sidebar Controls */}
-        <div className="p-3 border-t border-borderHairline bg-[#0A0D15] space-y-2">
+        {/* Sub-Sidebar Actions */}
+        <div className="p-3 border-t border-borderHairline bg-[#0C101A] space-y-2">
           <button
             onClick={handleSetActive}
             className={`w-full py-1.5 px-2 rounded font-bold text-[10px] flex items-center justify-center gap-1.5 transition border ${
@@ -503,7 +534,7 @@ export default function StrategyPanel({ onStrategySaved }) {
             }`}
           >
             {isCurrentActive ? <ToggleRight className="w-4 h-4 text-up" /> : <ToggleLeft className="w-4 h-4" />}
-            <span>{isCurrentActive ? '🟢 24/7 ACTIVE STRATEGY' : 'SET AS ACTIVE 24/7'}</span>
+            <span>{isCurrentActive ? '🟢 24/7 ACTIVE' : 'SET AS ACTIVE'}</span>
           </button>
 
           {strategies.length > 1 && (
@@ -518,18 +549,16 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       </div>
 
-      {/* RIGHT MAIN VIEWPORT */}
+      {/* TIER 3: MAIN CONTENT WORKSPACE */}
       <div className="flex-1 flex flex-col overflow-hidden bg-[#090C12]">
 
-        {/* Top Action Bar */}
+        {/* Top Header Bar */}
         <div className="h-11 px-4 bg-[#0E121B] border-b border-borderHairline flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-white uppercase">{currentStrategy?.title}</span>
-            {currentStrategy?.updatedAt && (
-              <span className="text-[10px] text-textMuted">
-                (Updated: {new Date(currentStrategy.updatedAt).toLocaleTimeString()})
-              </span>
-            )}
+            <span className="text-[10px] text-gold px-2 py-0.5 rounded bg-gold/15 border border-gold/30">
+              {SUB_NAV_ITEMS.find(n => n.id === activeSubTab)?.title}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -570,7 +599,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         </div>
 
-        {/* VIEWPORT CONTENT PER ACTIVE TAB */}
+        {/* WORKSPACE CONTENT PER ACTIVE TAB */}
         <div className="flex-1 flex overflow-hidden">
 
           {/* TAB 1: WRITE STRATEGY */}
@@ -651,7 +680,7 @@ export default function StrategyPanel({ onStrategySaved }) {
               </div>
 
               {/* Right: AI Live Strategy Evaluation Simulator */}
-              <div className="w-[380px] flex-shrink-0 flex flex-col bg-[#0D111A] overflow-hidden">
+              <div className="w-[360px] flex-shrink-0 flex flex-col bg-[#0D111A] overflow-hidden">
                 <div className="p-3 border-b border-borderHairline bg-[#0E131F] flex items-center justify-between">
                   <span className="text-[11px] uppercase font-bold text-accent flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
