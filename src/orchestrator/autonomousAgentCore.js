@@ -58,10 +58,11 @@ class AutonomousAgentCore {
 
     const autonomyMode = orchestrator?.autonomyMode || 'semi';
 
-    // 2b. Retrieve Active Master Strategy Directives (User-Defined Mandate)
+    // 2b. Retrieve Active Master Strategy Directives & Compiled Playbook
     const CustomStrategyStore = require('../strategies/customStrategyStore');
-    const strategyData = await CustomStrategyStore.getStrategy();
-    const activeInstructions = strategyData.enabled ? strategyData.instructions : 'No custom rules active — follow standard institutional SMC.';
+    const activeStrategy = await CustomStrategyStore.getActiveStrategy();
+    const activeInstructions = customStrategyText || (activeStrategy.enabled ? activeStrategy.instructions : 'No custom rules active — follow standard institutional SMC.');
+    const activePlaybook = activeStrategy.compiledPlaybook || null;
 
     // 3. Construct Tailored System & User Prompt based on Mode
     let systemPrompt = '';
@@ -72,12 +73,16 @@ class AutonomousAgentCore {
       : 'No previous history recorded yet.';
 
     if (isDeepThinking) {
-      // Deep Institutional Strategic Reasoning with User Strategy Directives
+      // Deep Institutional Strategic Reasoning with User Strategy Directives & Compiled Playbook
       systemPrompt = `
 You are an Autonomous Gold (XAU/USD) Trading AI Agent & Fund Manager for Ali Raza in Telegram.
 MODE: DEEP INSTITUTIONAL THINKING & SETUP SYNTHESIS.
 
-### 🎯 USER-DEFINED MASTER STRATEGY DIRECTIVES (TOP PRIORITY MANDATE):
+### 🎯 ACTIVE STRATEGY: "${activeStrategy.title || 'Master Strategy'}"
+${activePlaybook ? `--- 🤖 AI OPERATIONAL PLAYBOOK (COMPILED EXECUTION RULES) ---
+${JSON.stringify(activePlaybook, null, 2)}
+` : ''}
+--- RAW USER INSTRUCTIONS ---
 ${activeInstructions}
 
 LONG-TERM CONVERSATION HISTORY (From Day 1):
@@ -92,8 +97,8 @@ LIVE MARKET & BROKER SNAPSHOT:
 - Autonomy Mode: "${autonomyMode.toUpperCase()}"
 
 MANDATE & STRICT COMPLIANCE RULES:
-1. STRICT STRATEGY COMPLIANCE: The Master Strategy Directives defined above are your absolute law. Every trade setup MUST satisfy the rules, session windows, and confirmation checklist in the strategy.
-2. If the current market does NOT satisfy all criteria of the user's strategy, you MUST set "action": "HOLD" and clearly explain which specific rule was not met.
+1. STRICT STRATEGY COMPLIANCE: The Master Strategy Directives and Compiled AI Playbook defined above are your absolute law. Every trade setup MUST satisfy the monitored indicators, candlestick patterns, and execution trigger checklist.
+2. If the current market does NOT satisfy all criteria of the active strategy, you MUST set "action": "HOLD" and clearly explain which specific rule or indicator condition was not met.
 3. Perform deep multi-timeframe reasoning, identify Order Blocks, FVGs, Liquidity Sweeps, and SMT Divergences.
 4. Formulate a clear trade bias (BUY/SELL/HOLD) with exact Entry, SL, TP, and R:R.
 5. If Autonomy Mode is "AUTO", you can set "action_type": "EXECUTE_TRADE".

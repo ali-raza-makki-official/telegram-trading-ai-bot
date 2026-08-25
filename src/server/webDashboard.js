@@ -1039,10 +1039,10 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8d. Get Custom Strategy Instructions API
-  if (pathname === '/api/strategy/instructions' && req.method === 'GET') {
+  // 8d. Multi-Strategy List & Active Strategy API
+  if (pathname === '/api/strategy/list' && req.method === 'GET') {
     const CustomStrategyStore = require('../strategies/customStrategyStore');
-    CustomStrategyStore.getStrategy().then(data => {
+    CustomStrategyStore.getAllStrategies().then(data => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(data));
     }).catch(err => {
@@ -1052,7 +1052,174 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8e. Save Custom Strategy Instructions API
+  // 8e. Create New Strategy API
+  if (pathname === '/api/strategy/create' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const created = await CustomStrategyStore.createStrategy(payload);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, strategy: created }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8f. Update Strategy API
+  if (pathname === '/api/strategy/update' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const updated = await CustomStrategyStore.updateStrategy(payload.id, payload);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, strategy: updated }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8g. Delete Strategy API
+  if (pathname === '/api/strategy/delete' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const result = await CustomStrategyStore.deleteStrategy(payload.id);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...result }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8h. Set Active Strategy for 24/7 Execution API
+  if (pathname === '/api/strategy/set-active' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const active = await CustomStrategyStore.setActiveStrategy(payload.id);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, activeStrategy: active }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8i. AI Playbook Compiler ("Load Instructions") API
+  if (pathname === '/api/strategy/compile-playbook' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const compiledResult = await CustomStrategyStore.compilePlaybook(payload.id, payload.instructions);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...compiledResult }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8j. Full AI Market Telemetry & Indicator Inspector API
+  if (pathname === '/api/market/full-telemetry' && req.method === 'GET') {
+    const symbol = config.system.primarySymbol || 'XAUUSD';
+    const candleManager = require('../market-data/candleManager');
+    const marketFeed = require('../market-data/marketFeed');
+    const macroEngine = require('../market-data/macroEngine');
+    const { computeAllIndicators } = require('../indicators');
+    const { analyzeSMC } = require('../strategies/smc');
+    const { scanCandlestickPatterns } = require('../strategies/candlesticks');
+
+    const livePrice = Number(marketFeed.getLatestPrice(symbol) || 4519.0);
+    const session = require('../strategies/ict/killzones').getCurrentSessionInfo();
+    const macro = macroEngine.getMacroSnapshot();
+
+    const tfs = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
+    const telemetryByTf = {};
+
+    for (const tf of tfs) {
+      const candles = candleManager.getCandles(symbol, tf) || [];
+      if (candles.length > 0) {
+        const ind = computeAllIndicators(candles);
+        const smc = analyzeSMC(candles);
+        const pattern = scanCandlestickPatterns(candles);
+        telemetryByTf[tf] = {
+          candleCount: candles.length,
+          latestClose: candles[candles.length - 1].close,
+          candlestickPattern: pattern.primaryPattern || { pattern: 'Normal Candle', bias: 'NEUTRAL' },
+          allDetectedPatterns: pattern.detectedPatterns || [],
+          indicators: {
+            rsi: ind.rsi?.current ? Number(ind.rsi.current.toFixed(2)) : null,
+            rsiBias: ind.rsi?.bias || 'NEUTRAL',
+            ema9: ind.ema?.ema9 ? Number(ind.ema.ema9.toFixed(2)) : null,
+            ema21: ind.ema?.ema21 ? Number(ind.ema.ema21.toFixed(2)) : null,
+            ema50: ind.ema?.ema50 ? Number(ind.ema.ema50.toFixed(2)) : null,
+            ema200: ind.ema?.ema200 ? Number(ind.ema.ema200.toFixed(2)) : null,
+            macd: ind.macd || null,
+            atr: ind.atr ? Number(ind.atr.toFixed(2)) : null,
+          },
+          smc: {
+            trend: smc.structure?.trend || 'N/A',
+            nearestOB: smc.orderBlocks?.nearestBullishOB || smc.orderBlocks?.nearestBearishOB || null,
+            nearestFVG: smc.fvg?.nearestBullishFVG || smc.fvg?.nearestBearishFVG || null,
+            zone: smc.premiumDiscount?.zone || 'EQUILIBRIUM',
+          }
+        };
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      symbol,
+      livePrice,
+      session: session.marketSession,
+      activeKillzones: session.activeWindows ? session.activeWindows.map(w => w.name) : [],
+      macro,
+      telemetry: telemetryByTf,
+    }));
+    return;
+  }
+
+  // 8k. Legacy Strategy Instructions GET & POST
+  if (pathname === '/api/strategy/instructions' && req.method === 'GET') {
+    const CustomStrategyStore = require('../strategies/customStrategyStore');
+    CustomStrategyStore.getActiveStrategy().then(data => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    }).catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
   if (pathname === '/api/strategy/instructions' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -1071,7 +1238,7 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8f. Toggle Custom Strategy Active State API
+  // 8l. Toggle Custom Strategy Active State API
   if (pathname === '/api/strategy/toggle' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -1090,7 +1257,7 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 8g. Test Custom Strategy against Live Market State API
+  // 8m. Test Custom Strategy against Live Market State API
   if (pathname === '/api/strategy/test' && req.method === 'POST') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -1099,7 +1266,7 @@ function handleDashboardRequest(req, res, orchestrator) {
         const payload = JSON.parse(body || '{}');
         const autonomousCore = require('../orchestrator/autonomousAgentCore');
         const CustomStrategyStore = require('../strategies/customStrategyStore');
-        const strategyData = await CustomStrategyStore.getStrategy();
+        const strategyData = await CustomStrategyStore.getActiveStrategy();
         const testInstructions = payload.instructions || strategyData.instructions;
 
         const decision = await autonomousCore.thinkAndDecide({
