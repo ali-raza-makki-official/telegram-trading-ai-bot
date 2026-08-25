@@ -27,14 +27,8 @@ class MarketFeed extends EventEmitter {
     // Seed historical candles for all timeframes
     await this.seedInitialCandles();
 
-    // FIX #1: Only start simulated tick loop in paper mode.
-    // In metaapi/mt5 mode, real ticks come from the execution engine directly.
-    if (config.system.executionMode === 'paper') {
-      this.startLiveFeedLoop();
-      logger.info('Paper mode: Simulated tick generator started');
-    } else {
-      logger.info(`Live mode (${config.system.executionMode}): Simulated tick generator DISABLED — using real broker ticks`);
-    }
+    // NO simulated tick loop — ALL ticks come from real MetaApi broker connection
+    logger.info('Simulated tick generator DISABLED — using ONLY real Exness MT5 broker ticks via MetaApi');
 
     // FIX #17: Start periodic correlated data refresh (every 5 minutes) — REAL DATA from Yahoo Finance
     this.startCorrelatedDataRefresh();
@@ -48,49 +42,44 @@ class MarketFeed extends EventEmitter {
   async seedInitialCandles() {
     const symbol = config.system.primarySymbol;
     const metaApiClient = require('../execution/MetaApiClient');
-    
-    for (const tf of config.system.timeframes) {
-      // Load previously saved candles from database
-      await candleManager.loadFromDatabase(symbol, tf, 200);
-      let existing = candleManager.getCandles(symbol, tf);
 
-      // Fetch real historical broker candles if MetaApi is connected and we need more data
-      if (existing.length < 50 && metaApiClient.isConnected) {
-        try {
-          const realCandles = await metaApiClient.getHistoricalCandles(symbol, tf, 100);
-          if (realCandles && realCandles.length > 0) {
-            candleManager.setCandles(symbol, tf, realCandles);
-            logger.info({ symbol, timeframe: tf, count: realCandles.length }, 'Seeded real historical candles from MetaApi Exness MT5');
-            existing = candleManager.getCandles(symbol, tf);
-          }
-        } catch (err) {
-          logger.warn({ err: err.message, tf }, 'MetaApi candle fetch failed — no mock fallback');
-        }
+    if (!metaApiClient.isConfigured()) {
+      logger.error('MetaApi NOT configured! Set METAAPI_API_TOKEN and METAAPI_ACCOUNT_ID in .env — NO candles will be loaded');
+      return;
+    }
+
+    if (!metaApiClient.isConnected) {
+      logger.error('MetaApi NOT connected! Waiting for connection before seeding candles...');
+      // Wait up to 60 seconds for MetaApi to connect
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (metaApiClient.isConnected) break;
       }
+      if (!metaApiClient.isConnected) {
+        logger.error('MetaApi failed to connect after 60s — chart will have NO candles until connected');
+        return;
+      }
+    }
 
-      // No simulated data fallback — if no real data, analysis will skip this timeframe
-      if (existing.length < 15) {
-        logger.warn({ symbol, timeframe: tf, count: existing.length }, 'Insufficient real candle data — analysis for this timeframe will be skipped');
+    // Fetch ALL candles from MetaApi Exness MT5 — NO database fallback, NO demo data
+    for (const tf of config.system.timeframes) {
+      try {
+        const realCandles = await metaApiClient.getHistoricalCandles(symbol, tf, 200);
+        if (realCandles && realCandles.length > 0) {
+          candleManager.setCandles(symbol, tf, realCandles);
+          const newestTs = realCandles[realCandles.length - 1].timestamp;
+          const ageMinutes = Math.round((Date.now() - newestTs) / 60000);
+          logger.info({ symbol, timeframe: tf, count: realCandles.length, newestAge: ageMinutes + 'min' }, '✅ Seeded REAL Exness MT5 candles from MetaApi');
+        } else {
+          logger.error({ symbol, timeframe: tf }, '❌ MetaApi returned ZERO candles — check broker symbol and connection');
+        }
+      } catch (err) {
+        logger.error({ err: err.message, symbol, timeframe: tf }, '❌ MetaApi candle fetch FAILED — NO fallback to database');
       }
     }
   }
 
-  startLiveFeedLoop() {
-    const symbol = config.system.primarySymbol;
-    // Tick loop every 3 seconds (paper mode only)
-    this.pollTimer = setInterval(async () => {
-      if (!this.isRunning) return;
-
-      const m15Candles = candleManager.getCandles(symbol, '15m');
-      const lastCandle = m15Candles[m15Candles.length - 1];
-      const prevClose = this.latestPrices.get(symbol) || (lastCandle ? lastCandle.close : 4515.0);
-
-      // Small tick delta
-      const tickDelta = (Math.random() - 0.49) * 0.4;
-      const newPrice = Number((prevClose + tickDelta).toFixed(2));
-      this.updatePrice(symbol, newPrice);
-    }, 3000);
-  }
+  // REMOVED: Simulated tick generator — ALL ticks now come from real MetaApi Exness MT5 broker
 
   updatePrice(symbol, price) {
     const p = Number(price);

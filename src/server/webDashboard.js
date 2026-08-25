@@ -593,10 +593,8 @@ function getDashboardHtml() {
 
     // Load Candles and Plot Indicators
     async function loadChartData(tf) {
-      const METAAPI_TOKEN = "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI3OTJlZDBlOTY5OTVjN2UyZDU2NDExNjEyMjU1OWQ0MyIsImFjY2Vzc1J1bGVzIjpbeyJpZCI6InRyYWRpbmctYWNjb3VudC1tYW5hZ2VtZW50LWFwaSIsIm1ldGhvZHMiOlsidHJhZGluZy1hY2NvdW50LW1hbmFnZW1lbnQtYXBpOnJlc3Q6cHVibGljOio6KiJdLCJyb2xlcyI6WyJyZWFkZXIiXSwicmVzb3VyY2VzIjpbImFjY291bnQ6JFVTRVJfSUQkOjU5ZjEyOTQyLTgxYjctNDYxNy04MjBkLTRjZTY4NzhiNDg5ZiJdfSx7ImlkIjoibWV0YWFwaS1yZXN0LWFwaSIsIm1ldGhvZHMiOlsibWV0YWFwaS1hcGk6cmVzdDpwdWJsaWM6KjoqIl0sInJvbGVzIjpbInJlYWRlciIsIndyaXRlciJdLCJyZXNvdXJjZXMiOlsiYWNjb3VudDokVVNFUl9JRCQ6NTlmMTI5NDItODFiNy00NjE3LTgyMGQtNGNlNjg3OGI0ODlmIl19LHsiaWQiOiJtZXRhYXBpLXJwYy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyJhY2NvdW50OiRVU0VSX0lEJDo1OWYxMjk0Mi04MWI3LTQ2MTctODIwZC00Y2U2ODc4YjQ4OWYiXX0seyJpZCI6Im1ldGFhcGktcmVhbC10aW1lLXN0cmVhbWluZy1hcGkiLCJtZXRob2RzIjpbIm1ldGFhcGktYXBpOndzOnB1YmxpYzoqOioiXSwicm9sZXMiOlsicmVhZGVyIiwid3JpdGVyIl0sInJlc291cmNlcyI6WyJhY2NvdW50OiRVU0VSX0lEJDo1OWYxMjk0Mi04MWI3LTQ2MTctODIwZC00Y2U2ODc4YjQ4OWYiXX1dLCJpZ25vcmVSYXRlTGltaXRzIjpmYWxzZSwidG9rZW5JZCI6IjIwMjEwMjEzIiwiaW1wZXJzb25hdGVkIjpmYWxzZSwicmVhbFVzZXJJZCI6Ijc5MmVkMGU5Njk5NWM3ZTJkNTY0MTE2MTIyNTU5ZDQzIiwiaWF0IjoxNzg3MjQyNTc4LCJleHAiOjE3OTUwMTg1Nzh9.LdDpnrZQuTnUXRgnJpYlzvkSyGU4FWSjvG4xkoDOu0qbOALPi-OSjsBW6PRRq2G8zVQ9kz2JvKym4_Yayo0XqW3XtU33w48s0b10b-m3G2K1JgmHfY_wmXuDW9CpjLUi2su4AJGDneN0V0hqhi8-juHEGqhv1vXJ0ncV5igLXCqJebcKHVk1D0UoOL0w3jXaICzxEjBXizjgcUaYJ9QFOG5-n0HNN2VTxoeCbMWZGhUz6j9K_Ved95QfEKGwkIvlmOOfM7X5WRXY8ECJM6M79hM5y3dYl2XOE4FX_5WNmFcNCAkY9DfiCFBBsDy8ruBghEGfy1GCpaDeKvmoVf7Mwibl5cLvQsvSFTtjFqZHxv65JuLezMcf8i873VdAFwlwZWL1Wizgm4TN-8c66uRrXSwJb1dPixZqIMA54kqQuseiUqn7aaay7V-Jujduomj2gImftx254HyHOtIm7C6zaAksbD4DT6GUuuypE-1Jgg6FvPA2rVG6M_t3PFaB2Ba6DUOsMw1lDFkpNY7gEB7oYO9Xp_y3vcC1iV7NhcHukXKpb8M_br53OSMHqBaol8OKe8pyRwfdvDYdnsPsZoA2XACtRC72XmrtunKLK_J5iQ-XFo5Se8gYOy8pgCrwC3uqu7oBBFtRqQctQQns1aLqGUG8qQrEeCeb7fgMsdI2kUM";
-      const METAAPI_ACC_ID = "59f12942-81b7-4617-820d-4ce6878b489f";
-
-      // 1. Try local backend first
+      // Fetch candles exclusively from backend API (which fetches fresh MetaApi data)
+      // No hardcoded tokens or direct cloud API calls — security fix
       try {
         const res = await fetch('/api/chart/candles?symbol=XAUUSD&timeframe=' + tf);
         const data = await res.json();
@@ -604,35 +602,51 @@ function getDashboardHtml() {
           liveCandles = data.candles;
           candleSeries.setData(liveCandles);
           if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
-          const last = liveCandles[liveCandles.length - 1];
-          if (last) updateLivePrice(last.close);
+          // Use separate livePrice from API — don't distort historical candles
+          if (data.livePrice) {
+            updateLivePrice(data.livePrice);
+          } else {
+            const last = liveCandles[liveCandles.length - 1];
+            if (last) updateLivePrice(last.close);
+          }
           return;
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error('Backend candle fetch error:', err);
+      }
+      console.warn('No candles from backend — MetaApi may still be seeding data on startup');
+    }
 
-      // 2. Direct MetaApi Cloud Live Stream Real MT5 Candles Fallback
+    // FIX: Periodic candle refresh — re-fetch from server every 30s so new candles appear
+    let lastRefreshTf = null;
+    async function periodicCandleRefresh() {
+      if (currentTf !== lastRefreshTf) { lastRefreshTf = currentTf; return; }
       try {
-        const startTime = new Date(Date.now() - 5 * 86400000).toISOString();
-        const cloudUrl = 'https://mt-market-data-client-api-v1.london-a.agiliumtrade.ai/users/current/accounts/' + METAAPI_ACC_ID + '/historical-market-data/symbols/XAUUSDm/timeframes/' + tf + '/candles?startTime=' + startTime + '&limit=1000';
-        const cRes = await fetch(cloudUrl, { headers: { 'auth-token': METAAPI_TOKEN } });
-        const cData = await cRes.json();
-        if (Array.isArray(cData) && cData.length > 0) {
-          const slice = cData.slice(-150);
-          liveCandles = slice.map(c => ({
-            time: Math.floor(new Date(c.time).getTime() / 1000),
-            open: Number(c.open),
-            high: Number(c.high),
-            low: Number(c.low),
-            close: Number(c.close),
-            volume: Number(c.tickVolume || c.volume || 100),
-          }));
-          candleSeries.setData(liveCandles);
-          if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
-          const last = liveCandles[liveCandles.length - 1];
-          if (last) updateLivePrice(last.close);
+        const res = await fetch('/api/chart/candles?symbol=XAUUSD&timeframe=' + currentTf);
+        const data = await res.json();
+        if (data && data.candles && data.candles.length > 0) {
+          const freshCandles = data.candles;
+          // Only update if we got different data (new candles or updated last candle)
+          const oldLen = liveCandles.length;
+          const newLen = freshCandles.length;
+          if (newLen !== oldLen || (newLen > 0 && oldLen > 0 && freshCandles[newLen-1].time !== liveCandles[oldLen-1].time)) {
+            liveCandles = freshCandles;
+            candleSeries.setData(liveCandles);
+            if (overlayState.ema) calculateAndPlotEMAs(liveCandles);
+            console.log('Candle refresh: ' + newLen + ' candles loaded for ' + currentTf);
+          } else if (newLen > 0 && oldLen > 0) {
+            // Same count, same last time — just update the last candle from server (non-mutating)
+            const serverLast = freshCandles[newLen - 1];
+            const chartLast = liveCandles[oldLen - 1];
+            if (serverLast.close !== chartLast.close || serverLast.high !== chartLast.high || serverLast.low !== chartLast.low) {
+              liveCandles[oldLen - 1] = Object.assign({}, serverLast);
+              candleSeries.update(liveCandles[oldLen - 1]);
+            }
+          }
+          if (data.livePrice) updateLivePrice(data.livePrice);
         }
-      } catch (cloudErr) {
-        console.error('Cloud candles fetch error:', cloudErr);
+      } catch (err) {
+        // Silent — don't spam console on network errors
       }
     }
 
@@ -693,13 +707,27 @@ function getDashboardHtml() {
       currentPrice = Number(price);
       document.getElementById('headerGoldPrice').innerText = '$' + currentPrice.toFixed(2);
       
-      // Update active live candle bar
+      // FIX: Only update the last candle bar if live price is close to it (within 0.5%)
+      // Use a MUCH tighter threshold to prevent distorting candles with stale/old data
+      // The periodicCandleRefresh already handles proper candle updates from the server
       if (liveCandles.length > 0) {
         const last = liveCandles[liveCandles.length - 1];
-        last.close = currentPrice;
-        if (currentPrice > last.high) last.high = currentPrice;
-        if (currentPrice < last.low) last.low = currentPrice;
-        candleSeries.update(last);
+        const priceDiff = Math.abs(currentPrice - last.close);
+        const pctDiff = (priceDiff / last.close) * 100;
+        
+        if (pctDiff < 0.5) {
+          // Price is very close — safe to update the live candle bar
+          // Create a new object to avoid mutating the original data
+          const updated = Object.assign({}, last, {
+            close: currentPrice,
+            high: Math.max(last.high, currentPrice),
+            low: Math.min(last.low, currentPrice),
+          });
+          liveCandles[liveCandles.length - 1] = updated;
+          candleSeries.update(updated);
+        }
+        // If price is >0.5% away, the candle data is stale — don't distort it
+        // periodicCandleRefresh will handle proper updates from the server
       }
     }
 
@@ -774,7 +802,12 @@ function getDashboardHtml() {
       try {
         const res = await fetch('/api/status');
         const data = await res.json();
-        if (data.goldPrice) updateLivePrice(data.goldPrice);
+        // Only update the header price display — don't distort candles here
+        // Candles are updated properly by periodicCandleRefresh
+        if (data.goldPrice) {
+          currentPrice = Number(data.goldPrice);
+          document.getElementById('headerGoldPrice').innerText = '$' + currentPrice.toFixed(2);
+        }
         if (data.balance) document.getElementById('headerBalance').innerText = '$' + Number(data.balance).toFixed(2) + ' USD';
         if (data.session) document.getElementById('headerSession').innerText = data.session;
         if (data.bias) document.getElementById('headerBias').innerText = data.bias;
@@ -785,6 +818,8 @@ function getDashboardHtml() {
       initChart();
       runLiveAnalysis();
       setInterval(pollStatus, 3000);
+      // Refresh candle data from server every 15 seconds — fetches fresh MetaApi data each time
+      setInterval(periodicCandleRefresh, 15000);
     };
   </script>
 </body>
@@ -827,25 +862,63 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
-  // 3. Real-Time Chart Candles Feed API
+  // 3. Real-Time Chart Candles Feed API — ALWAYS fetches fresh from MetaApi Exness MT5
   if (pathname === '/api/chart/candles') {
     const symbol = parsedUrl.searchParams.get('symbol') || config.system.primarySymbol;
     const timeframe = parsedUrl.searchParams.get('timeframe') || '15m';
+    const metaApiClient = require('../execution/MetaApiClient');
     const candleManager = require('../market-data/candleManager');
-    const rawCandles = candleManager.getCandles(symbol, timeframe) || [];
-    
-    // Map to Lightweight Charts format: { time: unixTimestampInSeconds, open, high, low, close, volume }
-    const formatted = rawCandles.map(c => ({
-      time: Math.floor((c.timestamp || new Date(c.time).getTime()) / 1000),
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-      volume: Number(c.volume || 100),
-    }));
+    const marketFeed = require('../market-data/marketFeed');
 
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ symbol, timeframe, candles: formatted }));
+    (async () => {
+      // ALWAYS try to fetch fresh candles directly from MetaApi broker
+      let rawCandles = [];
+      if (metaApiClient.isConnected) {
+        try {
+          const freshCandles = await metaApiClient.getHistoricalCandles(symbol, timeframe, 200);
+          if (freshCandles && freshCandles.length > 0) {
+            rawCandles = freshCandles;
+            // Also update candleManager cache
+            candleManager.setCandles(symbol, timeframe, freshCandles);
+          }
+        } catch (err) {
+          console.error('MetaApi candle fetch failed for chart:', err.message);
+        }
+      }
+
+      // Fallback to candleManager cache only if MetaApi is not connected
+      if (rawCandles.length === 0) {
+        rawCandles = candleManager.getCandles(symbol, timeframe) || [];
+      }
+      
+      // Map to Lightweight Charts format: { time: unixTimestampInSeconds, open, high, low, close, volume }
+      let formatted = rawCandles.map(c => ({
+        time: Math.floor((c.timestamp || new Date(c.time).getTime()) / 1000),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume || 100),
+      }));
+
+      // Remove candles with invalid time (NaN) and sort chronologically
+      formatted = formatted.filter(c => c.time && !isNaN(c.time));
+      formatted.sort((a, b) => a.time - b.time);
+
+      // Deduplicate by timestamp — keep the last occurrence (most recent data wins)
+      const seen = new Map();
+      for (const c of formatted) {
+        seen.set(c.time, c);
+      }
+      formatted = Array.from(seen.values());
+
+      // Include live tick price from MetaApi broker
+      const livePrice = marketFeed.getLatestPrice(symbol);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ symbol, timeframe, candles: formatted, livePrice }));
+    })();
+    return;
   }
 
   // 4. Send Chart Snapshot Directly into Telegram API
@@ -934,6 +1007,73 @@ function handleDashboardRequest(req, res, orchestrator) {
       }
     });
     return;
+  }
+
+  // 8b. Open Positions API (for web dashboard)
+  if (pathname === '/api/positions') {
+    orchestrator.getOpenPositions().then(positions => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ positions: positions || [] }));
+    }).catch(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ positions: [] }));
+    });
+    return;
+  }
+
+  // 8c. Close Position API (for web dashboard)
+  if (pathname === '/api/trade/close' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body);
+        const result = await orchestrator.closePositionByTicket(payload.ticket);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: !!result, result }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // 8d. Serve Next.js static build from /dashboard/
+  if (pathname.startsWith('/dashboard/') || pathname === '/dashboard') {
+    const fs = require('fs');
+    const pathMod = require('path');
+    const webBuildDir = pathMod.resolve(process.cwd(), 'web', 'out');
+    // Strip /dashboard prefix to get the relative path in the build
+    let relativePath = pathname.replace(/^\/dashboard\/?/, '/');
+    if (relativePath === '/' || relativePath === '') relativePath = '/index.html';
+    let filePath = pathMod.join(webBuildDir, relativePath);
+    // If path doesn't exist, serve index.html (SPA fallback)
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      filePath = pathMod.join(webBuildDir, 'index.html');
+    }
+    if (fs.existsSync(filePath)) {
+      const ext = pathMod.extname(filePath);
+      const mimeTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.ico': 'image/x-icon' };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+  }
+
+  // 8e. Serve _next static assets (JS/CSS chunks)
+  if (pathname.startsWith('/_next/')) {
+    const fs = require('fs');
+    const pathMod = require('path');
+    const webBuildDir = pathMod.resolve(process.cwd(), 'web', 'out');
+    const filePath = pathMod.join(webBuildDir, pathname);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = pathMod.extname(filePath);
+      const mimeTypes = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
   }
 
   // 9. Default: Render Real-Time Terminal Web Dashboard HTML

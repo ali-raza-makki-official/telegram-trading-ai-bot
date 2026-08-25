@@ -369,6 +369,25 @@ const CandleRepo = {
     const list = storage.data.candles[key] || [];
     return list.slice(-limit);
   },
+
+  // FIX: Clear stale candles older than cutoffMs for a given symbol/timeframe
+  async clearStale(symbol, timeframe, cutoffMs) {
+    if (isMysql && mysqlPool) {
+      await mysqlPool.execute(
+        `DELETE FROM candles WHERE symbol = ? AND timeframe = ? AND timestamp < ?`,
+        [symbol, timeframe, cutoffMs]
+      );
+      return;
+    }
+
+    if (!storage) initDatabase();
+    const key = `${symbol}_${timeframe}`;
+    const list = storage.data.candles[key];
+    if (list) {
+      storage.data.candles[key] = list.filter(c => c.timestamp >= cutoffMs);
+      storage.schedulePersist();
+    }
+  },
 };
 
 // Settings Repository

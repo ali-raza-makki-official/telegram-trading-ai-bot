@@ -58,18 +58,7 @@ class AgentOrchestrator {
         marketFeed.latestPrices.set('XAUUSDm', initialPrice.bid);
       }
 
-      // Synchronize real Exness MT5 historical candles across all timeframes
-      for (const tf of config.system.timeframes) {
-        try {
-          const realCandles = await metaApiClient.getHistoricalCandles(this.primarySymbol, tf, 100);
-          if (realCandles && realCandles.length > 0) {
-            candleManager.setCandles(this.primarySymbol, tf, realCandles);
-            logger.info({ symbol: this.primarySymbol, timeframe: tf, count: realCandles.length }, 'Synchronized real Exness MT5 historical candles');
-          }
-        } catch (cErr) {
-          logger.warn({ err: cErr.message, tf }, 'Error fetching MT5 candles on startup');
-        }
-      }
+      // Candle seeding is handled by marketFeed.seedInitialCandles() — no need to fetch here
 
       metaApiClient.on('tick', ({ symbol, price, bid }) => {
         const live = price || bid;

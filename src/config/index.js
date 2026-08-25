@@ -48,7 +48,7 @@ const config = {
   // System & Autonomy
   system: {
     autonomyMode: process.env.AUTONOMY_MODE || 'semi', // 'auto' | 'semi' | 'manual'
-    executionMode: process.env.EXECUTION_MODE || 'paper', // 'paper' | 'metaapi' | 'mt5'
+    executionMode: process.env.EXECUTION_MODE || 'metaapi', // 'metaapi' | 'mt5' (paper mode removed)
     logLevel: process.env.LOG_LEVEL || 'info',
     primarySymbol: process.env.PRIMARY_SYMBOL || 'XAUUSD',
     timeframes: (process.env.TIME_FRAMES || '1m,5m,15m,1h,4h,1d').split(',').map(s => s.trim()),

@@ -113,7 +113,8 @@ class CandleManager {
     return snapshot;
   }
 
-  // Update current live candle with incoming broker tick
+  // Update current live candle with incoming broker tick from MetaApi
+  // ALWAYS updates — no staleness check since we ONLY use real MetaApi data
   updateOngoingCandle(symbol, timeframe, price) {
     this.initSymbolTimeframe(symbol, timeframe);
     const list = this.store.get(symbol)[timeframe];

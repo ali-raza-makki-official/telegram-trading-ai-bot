@@ -1088,13 +1088,23 @@ _Tap below to execute order within 3 minutes._
   async start() {
     if (!this.bot) return;
     this.isPolling = true;
-    this.bot.start({
-      onStart: (botInfo) => {
-        logger.info({ username: botInfo.username }, 'Telegram bot started listening');
-      },
-    }).catch((err) => {
-      logger.warn({ err: err.message }, 'Telegram polling interrupted / conflict detected');
-    });
+
+    const runPolling = async () => {
+      while (this.isPolling) {
+        try {
+          await this.bot.start({
+            onStart: (botInfo) => {
+              logger.info({ username: botInfo.username }, 'Telegram bot started listening');
+            },
+          });
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Telegram polling interrupted — auto-reconnecting in 3s...');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+    };
+
+    runPolling().catch(e => logger.error({ err: e.message }, 'Fatal bot loop error'));
   }
 
   async stop() {

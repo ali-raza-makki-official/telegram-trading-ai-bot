@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #0B0D10;
+  --bg-panel: #14171C;
+  --bg-panel-alt: #1A1E24;
+  --border: #262B33;
+  --text-primary: #E6E9ED;
+  --text-muted: #7C8593;
+  --accent: #3D8BFF;
+  --up: #1FBF75;
+  --down: #F0433D;
+  --warn: #E8A33D;
+  --gold: #F59E0B;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: #262B33; border-radius: 0px; }
+::-webkit-scrollbar-thumb:hover { background: #3D8BFF; }
+
+@keyframes flashUp { 0% { color: #1FBF75; } 100% { color: var(--text-primary); } }
+@keyframes flashDown { 0% { color: #F0433D; } 100% { color: var(--text-primary); } }
+.flash-up { animation: flashUp 350ms ease-out; }
+.flash-down { animation: flashDown 350ms ease-out; }
+
+.panel-header {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-muted);
+  background-color: #111418;
+  border-bottom: 1px solid var(--border);
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+
+.terminal-row { height: 26px; border-bottom: 1px solid #1A1E24; }
+.terminal-row:hover { background-color: #1A1E24; }
+
+select option { background-color: #14171C; color: #E6E9ED; }
