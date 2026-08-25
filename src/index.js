@@ -30,13 +30,11 @@ async function main() {
   printBanner();
 
   try {
-    await orchestrator.initialize();
-
-    // Start Interactive Web Dashboard & Health Check Server for Cloud Hosts
+    // 1. Start Interactive Web Dashboard & Health Check Server immediately
     const { handleDashboardRequest } = require('./server/webDashboard');
     const port = process.env.PORT || 3000;
     const server = http.createServer((req, res) => {
-      // FIX #27: Health check endpoint for uptime monitors (UptimeRobot, Railway, etc.)
+      // Health check endpoint for uptime monitors
       if (req.url === '/health' || req.url === '/healthz') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -61,8 +59,11 @@ async function main() {
     });
 
     server.listen(port, () => {
-      logger.info({ port }, 'HTTP Health Check & Dashboard Server running');
+      logger.info({ port }, `🌐 Web Dashboard & Real-Time Chart Terminal LIVE at http://localhost:${port}`);
     });
+
+    // 2. Initialize Trading Orchestrator & Broker Streaming in parallel
+    await orchestrator.initialize();
 
     // Handle graceful shutdown
     const handleShutdown = async (signal) => {
