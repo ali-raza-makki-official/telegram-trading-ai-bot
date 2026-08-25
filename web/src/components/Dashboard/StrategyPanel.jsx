@@ -5,10 +5,20 @@ import {
   FileText, Save, Sparkles, Sliders, ToggleLeft, ToggleRight,
   Check, Clock, Shield, RefreshCw, Plus, Trash2, BookOpen,
   Cpu, CheckCircle2, AlertTriangle, Eye, Layers, ChevronRight,
-  Activity, Zap, Compass, BarChart2
+  Activity, Zap, Compass, BarChart2, Play, Award, CheckCircle,
+  XCircle, HelpCircle, ArrowUpRight, TrendingUp, Filter
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+const RULE_INJECTORS = [
+  { label: '🏛️ Silver SMT Divergence', text: '\n- SMT Filter: Check inverse correlation with Silver (XAG/USD) before confirming entry.' },
+  { label: '🎯 London Killzone Sweep', text: '\n- Killzone: Wait for 07:00 UTC London Open sweep of Asian session High/Low.' },
+  { label: '🛡️ Break-Even at 1.0R', text: '\n- Trade Management: Automatically move Stop Loss to Break-Even as soon as 1.0R profit is reached.' },
+  { label: '⚡ 50% Partials at 1.5R', text: '\n- Partials: Close 50% of position size at 1.5R and let remaining 50% run to final target.' },
+  { label: '🚫 15m High-Impact News Blackout', text: '\n- News Guard: Do not enter new trades 15 minutes before or after USD CPI, NFP, or FOMC.' },
+  { label: '🕯️ Candlestick Reversal Confirmation', text: '\n- Candle Trigger: Require 15m Bullish/Bearish Engulfing or Pinbar wick rejection at the key zone.' },
+];
 
 export default function StrategyPanel({ onStrategySaved }) {
   // Strategy State
@@ -18,8 +28,18 @@ export default function StrategyPanel({ onStrategySaved }) {
   const [instructions, setInstructions] = useState('');
   const [title, setTitle] = useState('');
 
-  // UI Modes & Telemetry
-  const [activeSubTab, setActiveSubTab] = useState('editor'); // 'editor' | 'playbook' | 'telemetry'
+  // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'backtest' | 'telemetry'
+  const [activeSubTab, setActiveSubTab] = useState('editor');
+
+  // Live Rule Conformance HUD State
+  const [hudData, setHudData] = useState(null);
+  const [hudLoading, setHudLoading] = useState(false);
+
+  // Backtest State
+  const [backtestData, setBacktestData] = useState(null);
+  const [backtestLoading, setBacktestLoading] = useState(false);
+
+  // Telemetry State
   const [telemetry, setTelemetry] = useState(null);
   const [telemetryLoading, setTelemetryLoading] = useState(false);
 
@@ -31,7 +51,7 @@ export default function StrategyPanel({ onStrategySaved }) {
   const [testResult, setTestResult] = useState(null);
   const [saveToast, setSaveToast] = useState(null);
 
-  // New Strategy Modal / Inline Creation
+  // New Strategy Modal
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
@@ -64,7 +84,23 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   }, []);
 
-  // Fetch Full Market Telemetry (All Indicators & Candlestick Patterns)
+  // Fetch Live Rule Conformance HUD
+  const fetchHUD = useCallback(async () => {
+    setHudLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/strategy/conformance-hud`);
+      if (res.ok) {
+        const data = await res.json();
+        setHudData(data);
+      }
+    } catch (e) {
+      console.error('HUD fetch error:', e);
+    } finally {
+      setHudLoading(false);
+    }
+  }, []);
+
+  // Fetch Full Market Telemetry
   const fetchTelemetry = useCallback(async () => {
     setTelemetryLoading(true);
     try {
@@ -80,15 +116,29 @@ export default function StrategyPanel({ onStrategySaved }) {
     }
   }, []);
 
+  // Auto-refresh HUD if HUD tab is active
   useEffect(() => {
     fetchStrategies();
   }, [fetchStrategies]);
+
+  useEffect(() => {
+    if (activeSubTab === 'hud') {
+      fetchHUD();
+      const interval = setInterval(fetchHUD, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [activeSubTab, fetchHUD]);
 
   const handleSelectStrategy = (strat) => {
     setCurrentStrategy(strat);
     setInstructions(strat.instructions || '');
     setTitle(strat.title || '');
     setTestResult(null);
+  };
+
+  const handleInjectRule = (snippet) => {
+    setInstructions((prev) => prev.trim() + '\n' + snippet.trim() + '\n');
+    showToast('⚡ Institutional Rule injected!', 'success');
   };
 
   // Save Raw Instructions
@@ -143,6 +193,27 @@ export default function StrategyPanel({ onStrategySaved }) {
       showToast('❌ Compilation error: ' + e.message, 'error');
     } finally {
       setCompiling(false);
+    }
+  };
+
+  // Run Historical Simulation Backtest
+  const handleRunBacktest = async () => {
+    setBacktestLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/strategy/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candleCount: 250 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBacktestData(data);
+        showToast('🧪 Historical MT5 simulation complete!', 'success');
+      }
+    } catch (e) {
+      showToast('❌ Backtest failed: ' + e.message, 'error');
+    } finally {
+      setBacktestLoading(false);
     }
   };
 
@@ -232,7 +303,7 @@ export default function StrategyPanel({ onStrategySaved }) {
     return (
       <div className="flex items-center justify-center h-full bg-[#0B0E14] text-textMuted font-mono text-xs">
         <RefreshCw className="w-5 h-5 animate-spin text-gold mr-2" />
-        <span>Loading Strategy & AI Playbook Engine...</span>
+        <span>Loading Institutional Strategy Engine...</span>
       </div>
     );
   }
@@ -246,7 +317,7 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* TOP HEADER: Multi-Strategy Selector & Action Buttons */}
       <div className="h-12 px-4 bg-[#0D1118] border-b border-borderHairline flex items-center justify-between flex-shrink-0 z-20">
         
-        {/* Left: Strategy Selector Tabs & "+ New" Button */}
+        {/* Left: Strategy Selector Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto max-w-[65%] py-1">
           <div className="flex items-center gap-1.5 font-bold text-gold mr-2 flex-shrink-0">
             <Cpu className="w-4 h-4 text-gold animate-pulse" />
@@ -287,7 +358,7 @@ export default function StrategyPanel({ onStrategySaved }) {
           </button>
         </div>
 
-        {/* Right: Main Execution Controls & Actions */}
+        {/* Right: Main Execution Controls */}
         <div className="flex items-center gap-2">
           {saveToast && (
             <span
@@ -349,7 +420,7 @@ export default function StrategyPanel({ onStrategySaved }) {
         </div>
       </div>
 
-      {/* SECONDARY NAVIGATION: Editor vs Compiled Playbook vs Full Telemetry */}
+      {/* SECONDARY NAVIGATION: 5 Institutional Sub-Tabs */}
       <div className="h-9 px-4 bg-[#0A0E17] border-b border-borderHairline flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-2">
           <button
@@ -361,7 +432,22 @@ export default function StrategyPanel({ onStrategySaved }) {
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>1. Raw Instructions & Rules</span>
+            <span>1. ✍️ Rules & Injector</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveSubTab('hud');
+              fetchHUD();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+              activeSubTab === 'hud'
+                ? 'bg-[#182030] text-up border border-up/30'
+                : 'text-textMuted hover:text-white'
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-up animate-pulse" />
+            <span>2. 🟢 Live Rule Conformance HUD</span>
           </button>
 
           <button
@@ -373,7 +459,22 @@ export default function StrategyPanel({ onStrategySaved }) {
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>2. 🤖 AI Operational Playbook {playbook ? '✓' : '(Not Compiled)'}</span>
+            <span>3. 🤖 AI Operational Playbook</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveSubTab('backtest');
+              if (!backtestData) handleRunBacktest();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
+              activeSubTab === 'backtest'
+                ? 'bg-[#182030] text-yellow-400 border border-yellow-400/30'
+                : 'text-textMuted hover:text-white'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 text-yellow-400" />
+            <span>4. 🧪 MT5 Backtest & AI Tuner</span>
           </button>
 
           <button
@@ -383,12 +484,12 @@ export default function StrategyPanel({ onStrategySaved }) {
             }}
             className={`flex items-center gap-1.5 px-3 py-1 rounded transition font-bold ${
               activeSubTab === 'telemetry'
-                ? 'bg-[#182030] text-up border border-up/30'
+                ? 'bg-[#182030] text-cyan-400 border border-cyan-400/30'
                 : 'text-textMuted hover:text-white'
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>3. 🔍 Full AI Indicator & Pattern Inspector</span>
+            <span>5. 🔍 Telemetry & Patterns</span>
           </button>
         </div>
 
@@ -403,10 +504,10 @@ export default function StrategyPanel({ onStrategySaved }) {
       {/* MAIN VIEWPORT */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* TAB 1: RAW INSTRUCTIONS EDITOR & AI TEST SIMULATOR */}
+        {/* SUB-TAB 1: RAW INSTRUCTIONS & QUICK INJECTOR */}
         {activeSubTab === 'editor' && (
           <div className="flex-1 flex overflow-hidden">
-            {/* Left: Textarea Editor */}
+            {/* Left: Textarea Editor & Injector Chips */}
             <div className="flex-1 flex flex-col border-r border-borderHairline bg-[#0B0E14] overflow-hidden">
               <div className="p-2 px-3 bg-[#0F1420] border-b border-borderHairline flex items-center justify-between text-[11px]">
                 <input
@@ -417,6 +518,22 @@ export default function StrategyPanel({ onStrategySaved }) {
                   className="bg-transparent font-bold text-white text-sm focus:outline-none focus:ring-1 focus:ring-gold/40 px-2 py-0.5 rounded w-1/2"
                 />
                 <span className="text-[10px] text-textMuted">✍️ Type in English, Roman Urdu, or Urdu</span>
+              </div>
+
+              {/* Quick Institutional Rule Injector Chips */}
+              <div className="p-2 px-3 bg-[#0D121D] border-b border-borderHairline flex items-center gap-1.5 overflow-x-auto">
+                <span className="text-[9px] uppercase font-bold text-gold flex items-center gap-1 mr-1 flex-shrink-0">
+                  <Zap className="w-3 h-3" /> Quick Add Rules:
+                </span>
+                {RULE_INJECTORS.map((inj, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleInjectRule(inj.text)}
+                    className="px-2 py-0.5 bg-[#141A28] hover:bg-[#1D253A] text-textPrimary hover:text-white border border-white/10 hover:border-gold/40 rounded text-[10px] whitespace-nowrap transition"
+                  >
+                    {inj.label}
+                  </button>
+                ))}
               </div>
 
               <textarea
@@ -480,7 +597,101 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         )}
 
-        {/* TAB 2: COMPILED AI OPERATIONAL PLAYBOOK */}
+        {/* SUB-TAB 2: REAL-TIME RULE CONFORMANCE HUD */}
+        {activeSubTab === 'hud' && (
+          <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto font-sans">
+            <div className="max-w-5xl mx-auto w-full space-y-4">
+              {/* HUD Summary Strip */}
+              <div className="p-4 rounded-xl bg-[#0F1424] border border-up/30 shadow-lg flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-up uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <CheckCircle2 className="w-4 h-4 text-up animate-pulse" />
+                    Live Deterministic Rule Conformance HUD
+                  </div>
+                  <h2 className="text-base font-bold text-white">
+                    Strategy: {hudData?.strategyTitle || currentStrategy?.title}
+                  </h2>
+                  <p className="text-xs text-textMuted mt-0.5">
+                    Continuous quantitative rule verification on live Exness MT5 market data.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-[10px] text-textMuted uppercase block">Conformance Score</span>
+                    <span className="text-2xl font-bold text-up">{hudData?.conformanceScore || 0}%</span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-[#141B2D] border border-white/10 text-center">
+                    <span className="text-[10px] text-textMuted uppercase block">Status</span>
+                    <span className={`text-xs font-bold ${hudData?.overallState === 'READY_TO_EXECUTE' ? 'text-up' : hudData?.overallState === 'CONDITIONS_FAILED' ? 'text-down' : 'text-yellow-400'}`}>
+                      {hudData?.overallState === 'READY_TO_EXECUTE' ? '🟢 READY TO EXECUTE' : hudData?.overallState === 'CONDITIONS_FAILED' ? '🔴 CONDITIONS FAILED' : '⏳ WAITING FOR CONFLUENCE'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={fetchHUD}
+                    disabled={hudLoading}
+                    className="h-8 px-3 bg-[#1A2234] hover:bg-[#25304A] text-up border border-up/30 rounded font-bold flex items-center gap-1 text-xs transition"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${hudLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Rule-by-Rule Live Matrix */}
+              <div className="space-y-2.5">
+                {(hudData?.rules || []).map((r, i) => {
+                  const isPass = r.status === 'PASS';
+                  const isFail = r.status === 'FAIL';
+                  return (
+                    <div
+                      key={i}
+                      className={`p-3.5 rounded-lg border transition flex items-start justify-between ${
+                        isPass
+                          ? 'bg-[#0E1624] border-up/30'
+                          : isFail
+                          ? 'bg-[#1A1118] border-down/30'
+                          : 'bg-[#121622] border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {isPass && <CheckCircle className="w-5 h-5 text-up flex-shrink-0 mt-0.5" />}
+                        {isFail && <XCircle className="w-5 h-5 text-down flex-shrink-0 mt-0.5" />}
+                        {!isPass && !isFail && <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />}
+
+                        <div>
+                          <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <span>{r.rule}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/40 text-textMuted uppercase">
+                              {r.category}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{r.details}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            isPass
+                              ? 'bg-up/20 text-up border-up/30'
+                              : isFail
+                              ? 'bg-down/20 text-down border-down/30'
+                              : 'bg-yellow-400/20 text-yellow-400 border-yellow-400/30'
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUB-TAB 3: COMPILED AI OPERATIONAL PLAYBOOK */}
         {activeSubTab === 'playbook' && (
           <div className="flex-1 flex overflow-hidden p-4 bg-[#090C14] overflow-y-auto">
             {!playbook ? (
@@ -531,7 +742,6 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                 {/* Monitored Elements Grid */}
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Monitored Timeframes & Indicators */}
                   <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-gold uppercase tracking-wider block mb-2">
                       📊 Monitored Indicators
@@ -545,7 +755,6 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </div>
                   </div>
 
-                  {/* Monitored Candlestick Patterns */}
                   <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-up uppercase tracking-wider block mb-2">
                       🕯️ Candlestick Patterns
@@ -559,7 +768,6 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </div>
                   </div>
 
-                  {/* SMC Structures & Sessions */}
                   <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-accent uppercase tracking-wider block mb-2">
                       🏛️ SMC & Session Filters
@@ -576,7 +784,6 @@ export default function StrategyPanel({ onStrategySaved }) {
 
                 {/* Trigger Checklist & Risk Protocol */}
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Trigger Checklist */}
                   <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-white uppercase tracking-wider block mb-2">
                       ✅ 24/7 Execution Trigger Checklist
@@ -591,7 +798,6 @@ export default function StrategyPanel({ onStrategySaved }) {
                     </div>
                   </div>
 
-                  {/* Risk Management Protocol */}
                   <div className="p-3.5 rounded-lg bg-[#0E131E] border border-borderHairline">
                     <span className="text-[11px] font-bold text-white uppercase tracking-wider block mb-2">
                       🛡️ Risk Management Protocol
@@ -619,7 +825,90 @@ export default function StrategyPanel({ onStrategySaved }) {
           </div>
         )}
 
-        {/* TAB 3: FULL AI MARKET TELEMETRY & INDICATOR INSPECTOR */}
+        {/* SUB-TAB 4: HISTORICAL MT5 BACKTEST & AI PARAMETER AUTO-TUNER */}
+        {activeSubTab === 'backtest' && (
+          <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto font-sans">
+            <div className="max-w-5xl mx-auto w-full space-y-4">
+              {/* Backtest Header & Trigger */}
+              <div className="p-4 rounded-xl bg-[#121828] border border-yellow-400/30 shadow-lg flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-yellow-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <Award className="w-4 h-4 text-yellow-400" />
+                    Historical MT5 Candle Backtest & Parameter Auto-Tuner
+                  </div>
+                  <h2 className="text-base font-bold text-white">
+                    Testing on Exness MT5 15m Real Data
+                  </h2>
+                  <p className="text-xs text-textMuted mt-0.5">
+                    Evaluates strategy entry triggers, SL/TP dynamics, and Win Rate over past market cycles.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleRunBacktest}
+                  disabled={backtestLoading}
+                  className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded-lg flex items-center gap-2 text-xs transition shadow-md disabled:opacity-50"
+                >
+                  <Play className={`w-3.5 h-3.5 ${backtestLoading ? 'animate-spin' : ''}`} />
+                  <span>{backtestLoading ? 'Simulating MT5 Candles...' : 'Run Simulation'}</span>
+                </button>
+              </div>
+
+              {backtestLoading && (
+                <div className="flex flex-col items-center justify-center p-12 text-textMuted gap-2">
+                  <RefreshCw className="w-8 h-8 animate-spin text-yellow-400" />
+                  <span>Running deterministic simulation across 250 historical Exness candles...</span>
+                </div>
+              )}
+
+              {!backtestLoading && backtestData && (
+                <div className="space-y-4">
+                  {/* Metric Cards Grid */}
+                  <div className="grid grid-cols-5 gap-3">
+                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                      <span className="text-[10px] text-textMuted uppercase block">Simulated Win Rate</span>
+                      <span className="text-2xl font-bold text-up">{backtestData.winRate}%</span>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                      <span className="text-[10px] text-textMuted uppercase block">Total Setups</span>
+                      <span className="text-2xl font-bold text-white">{backtestData.totalTrades}</span>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                      <span className="text-[10px] text-textMuted uppercase block">Profit Factor</span>
+                      <span className="text-2xl font-bold text-yellow-400">{backtestData.profitFactor}</span>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                      <span className="text-[10px] text-textMuted uppercase block">Average R:R</span>
+                      <span className="text-2xl font-bold text-cyan-400">1:{backtestData.averageRR}</span>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#0E131E] border border-borderHairline text-center">
+                      <span className="text-[10px] text-textMuted uppercase block">Max Drawdown</span>
+                      <span className="text-2xl font-bold text-textPrimary">{backtestData.maxDrawdown}</span>
+                    </div>
+                  </div>
+
+                  {/* AI Parameter Tuning Recommendations */}
+                  <div className="p-4 rounded-xl bg-[#141A29] border border-gold/30">
+                    <h3 className="text-xs font-bold text-gold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4" />
+                      AI Parameter Optimization & Tuning Recommendations:
+                    </h3>
+                    <div className="space-y-2">
+                      {(backtestData.aiTuningRecommendations || []).map((rec, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2 rounded bg-[#0E131E] text-xs text-slate-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-gold flex-shrink-0 mt-0.5" />
+                          <span>{rec}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SUB-TAB 5: FULL AI MARKET TELEMETRY & PATTERN INSPECTOR */}
         {activeSubTab === 'telemetry' && (
           <div className="flex-1 flex flex-col p-4 bg-[#090C14] overflow-y-auto">
             <div className="flex items-center justify-between mb-3 flex-shrink-0">

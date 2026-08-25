@@ -1288,6 +1288,42 @@ function handleDashboardRequest(req, res, orchestrator) {
     return;
   }
 
+  // 8n. Real-Time Strategy Conformance HUD API
+  if (pathname === '/api/strategy/conformance-hud' && req.method === 'GET') {
+    const CustomStrategyStore = require('../strategies/customStrategyStore');
+    const StrategyRuleEngine = require('../strategies/StrategyRuleEngine');
+    CustomStrategyStore.getActiveStrategy().then(strat => {
+      const hud = StrategyRuleEngine.evaluateLiveConformance(strat);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(hud));
+    }).catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
+  // 8o. Historical Candle Backtest & AI Parameter Auto-Tuner API
+  if (pathname === '/api/strategy/backtest' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const StrategyRuleEngine = require('../strategies/StrategyRuleEngine');
+        const strat = await CustomStrategyStore.getActiveStrategy();
+        const results = await StrategyRuleEngine.runBacktest(strat, payload.candleCount || 200);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, ...results }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 8d. Serve Main Next.js React Frontend (Static Build from web/out/)
   const fs = require('fs');
   const pathMod = require('path');

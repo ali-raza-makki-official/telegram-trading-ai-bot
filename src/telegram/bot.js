@@ -486,7 +486,9 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
       msg += `\n_💡 To update, send:_\n\`/setstrategy <your rules in English or Roman Urdu>\``;
 
       const kb = new InlineKeyboard()
-        .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY')
+        .text('🟢 Live Rule HUD', 'ACTION:HUD')
+        .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY').row()
+        .text('🧪 Backtest (MT5 Candles)', 'ACTION:BACKTEST')
         .text('📊 15m Analysis', 'ACTION:ANALYZE_15m').row()
         .text('💼 Account Status', 'ACTION:STATUS')
         .text('🛡️ Open Positions', 'ACTION:POSITIONS');
@@ -496,6 +498,42 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
 
     this.bot.command('instructions', handleStrategyView);
     this.bot.command('strategy', handleStrategyView);
+
+    // /hud or /rules command — Real-Time Live Rule Conformance Checklist
+    const handleHUDView = async (ctx) => {
+      await ctx.reply('⏳ *Evaluating Active Strategy Rules against Live Exness MT5 Feeds...*', { parse_mode: 'Markdown' });
+      try {
+        const CustomStrategyStore = require('../strategies/customStrategyStore');
+        const StrategyRuleEngine = require('../strategies/StrategyRuleEngine');
+        const strat = await CustomStrategyStore.getActiveStrategy();
+        const hud = StrategyRuleEngine.evaluateLiveConformance(strat);
+
+        let report = `📊 *Real-Time Strategy Conformance HUD*\n`;
+        report += `• Active Strategy: *${hud.strategyTitle || 'Master Strategy'}*\n`;
+        report += `• Status: *${hud.overallState === 'READY_TO_EXECUTE' ? '🟢 READY TO EXECUTE' : hud.overallState === 'CONDITIONS_FAILED' ? '🔴 CONDITIONS FAILED' : '⏳ WAITING FOR CONFLUENCE'}*\n`;
+        report += `• Conformance Score: *${hud.conformanceScore}%* (${hud.passRules}/${hud.totalRules} Rules Passed)\n`;
+        report += `• Live Price: \`$${hud.livePrice.toFixed(2)}\`\n\n`;
+        report += `📋 *Live Rule-by-Rule Checklist:*\n`;
+
+        for (const r of hud.rules) {
+          const icon = r.status === 'PASS' ? '🟢' : r.status === 'FAIL' ? '🔴' : '⏳';
+          report += `${icon} *${r.rule}*\n  └ _${r.details}_\n\n`;
+        }
+
+        const kb = new InlineKeyboard()
+          .text('🔄 Refresh HUD', 'ACTION:HUD')
+          .text('⚡ AI Trade Thesis', 'ACTION:TEST_STRATEGY').row()
+          .text('🧪 Backtest Strategy', 'ACTION:BACKTEST')
+          .text('💼 Account Status', 'ACTION:STATUS');
+
+        await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
+      } catch (err) {
+        await ctx.reply(`❌ HUD generation failed: ${err.message}`);
+      }
+    };
+
+    this.bot.command('hud', handleHUDView);
+    this.bot.command('rules', handleHUDView);
 
     // /setstrategy [your rules...] — Dynamically update strategy from Telegram
     this.bot.command('setstrategy', async (ctx) => {
@@ -512,8 +550,8 @@ Welcome Ali Raza! I am your AI Copilot powered by Google Gemini, SMC/ICT Liquidi
         const updated = await CustomStrategyStore.setStrategy(rawText, true);
 
         const kb = new InlineKeyboard()
-          .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY')
-          .text('📋 View Full Strategy', 'ACTION:VIEW_STRATEGY');
+          .text('🟢 Live Rule HUD', 'ACTION:HUD')
+          .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY');
 
         await ctx.reply(
           `✅ *Master Strategy Directives Updated Successfully!*\n\n• Length: \`${updated.instructions.length} characters\`\n• Status: *🟢 Active & Enforced 24/7*\n\n_AI Gemini reasoner will now strictly evaluate every trade setup against your new rules._`,
@@ -834,6 +872,74 @@ ${thesis.reasoning}
           await ctx.reply(replyMsg, { parse_mode: 'Markdown', reply_markup: kb });
         } catch (err) {
           await ctx.reply(`❌ Strategy evaluation failed: ${err.message}`);
+        }
+        return;
+      }
+
+      // 5d-2. Live Real-Time Rule Conformance HUD (ACTION:HUD)
+      if (data === 'ACTION:HUD') {
+        await ctx.answerCallbackQuery({ text: 'Refreshing Live Rule HUD...' });
+        try {
+          const CustomStrategyStore = require('../strategies/customStrategyStore');
+          const StrategyRuleEngine = require('../strategies/StrategyRuleEngine');
+          const strat = await CustomStrategyStore.getActiveStrategy();
+          const hud = StrategyRuleEngine.evaluateLiveConformance(strat);
+
+          let report = `📊 *Real-Time Strategy Conformance HUD*\n`;
+          report += `• Active Strategy: *${hud.strategyTitle || 'Master Strategy'}*\n`;
+          report += `• Status: *${hud.overallState === 'READY_TO_EXECUTE' ? '🟢 READY TO EXECUTE' : hud.overallState === 'CONDITIONS_FAILED' ? '🔴 CONDITIONS FAILED' : '⏳ WAITING FOR CONFLUENCE'}*\n`;
+          report += `• Conformance Score: *${hud.conformanceScore}%* (${hud.passRules}/${hud.totalRules} Rules Passed)\n`;
+          report += `• Live Price: \`$${hud.livePrice.toFixed(2)}\`\n\n`;
+          report += `📋 *Live Rule-by-Rule Checklist:*\n`;
+
+          for (const r of hud.rules) {
+            const icon = r.status === 'PASS' ? '🟢' : r.status === 'FAIL' ? '🔴' : '⏳';
+            report += `${icon} *${r.rule}*\n  └ _${r.details}_\n\n`;
+          }
+
+          const kb = new InlineKeyboard()
+            .text('🔄 Refresh HUD', 'ACTION:HUD')
+            .text('⚡ AI Trade Thesis', 'ACTION:TEST_STRATEGY').row()
+            .text('🧪 Backtest Strategy', 'ACTION:BACKTEST')
+            .text('💼 Account Status', 'ACTION:STATUS');
+
+          await ctx.reply(report, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ HUD generation failed: ${err.message}`);
+        }
+        return;
+      }
+
+      // 5d-3. Historical Candle Backtest & AI Parameter Auto-Tuner (ACTION:BACKTEST)
+      if (data === 'ACTION:BACKTEST') {
+        await ctx.answerCallbackQuery({ text: 'Running Historical MT5 Simulation...' });
+        await ctx.reply('⏳ *Running Backtest on Historical Exness MT5 Candles (15m)...*', { parse_mode: 'Markdown' });
+        try {
+          const CustomStrategyStore = require('../strategies/customStrategyStore');
+          const StrategyRuleEngine = require('../strategies/StrategyRuleEngine');
+          const strat = await CustomStrategyStore.getActiveStrategy();
+          const results = await StrategyRuleEngine.runBacktest(strat, 250);
+
+          let msg = `🧪 *Historical Backtest & AI Simulation Results*\n\n`;
+          msg += `• Strategy: *${results.strategyTitle || 'Active Strategy'}*\n`;
+          msg += `• Candles Tested: \`${results.totalCandlesTested} (15m)\`\n`;
+          msg += `• Simulated Setups: \`${results.totalTrades} Trades\`\n`;
+          msg += `• Win Rate: *${results.winRate}%* (Wins: ${results.wins} | Losses: ${results.losses})\n`;
+          msg += `• Profit Factor: *${results.profitFactor}* | Avg RR: \`1:${results.averageRR}\`\n`;
+          msg += `• Max Drawdown: \`${results.maxDrawdown}\`\n\n`;
+          msg += `🧠 *AI Parameter Optimization & Tuning Recommendations:*\n`;
+
+          for (const rec of (results.aiTuningRecommendations || [])) {
+            msg += `• ${rec}\n`;
+          }
+
+          const kb = new InlineKeyboard()
+            .text('🟢 Live Rule HUD', 'ACTION:HUD')
+            .text('⚡ Test on Live Market', 'ACTION:TEST_STRATEGY');
+
+          await ctx.reply(msg, { parse_mode: 'Markdown', reply_markup: kb });
+        } catch (err) {
+          await ctx.reply(`❌ Backtest failed: ${err.message}`);
         }
         return;
       }
