@@ -214,19 +214,20 @@ class MetaApiClient extends EventEmitter {
     }
   }
 
-  async getHistoricalCandles(symbol = config.system.primarySymbol, timeframe = '15m', limit = 150) {
+  async getHistoricalCandles(symbol = config.system.primarySymbol, timeframe = '15m', limit = 100) {
     if (!this.account) return null;
     try {
       const targetSymbol = this.resolveSymbol(symbol);
       const metaTf = timeframe.toLowerCase();
-      // Start 5 days ago and fetch full batch so we always reach the latest market close candle
-      const startTime = new Date(Date.now() - 5 * 86400000);
+      const tfMinutes = metaTf === '1m' ? 1 : metaTf === '5m' ? 5 : metaTf === '15m' ? 15 : metaTf === '30m' ? 30 : metaTf === '1h' ? 60 : metaTf === '4h' ? 240 : metaTf === '1d' ? 1440 : 10080;
       
-      const rawCandles = await this.account.getHistoricalCandles(targetSymbol, metaTf, startTime, 1000);
+      // Calculate precise startTime to ensure we always capture the latest live market candle
+      const startTime = new Date(Date.now() - (limit * tfMinutes * 60 * 1000 * 1.5));
+      
+      const rawCandles = await this.account.getHistoricalCandles(targetSymbol, metaTf, startTime, limit);
 
       if (rawCandles && rawCandles.length > 0) {
-        const slice = rawCandles.slice(-limit);
-        return slice.map(c => ({
+        return rawCandles.map(c => ({
           timestamp: new Date(c.time).getTime(),
           time: new Date(c.time).toISOString(),
           open: Number(c.open),
