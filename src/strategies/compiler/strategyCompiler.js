@@ -142,6 +142,7 @@ Output strictly valid JSON with this exact schema:
 
       const spec = parsed.strategy_spec;
       spec.compiledAt = new Date().toISOString();
+      spec.rule_groups = buildRuleGroupsFromSpec(spec, cleanInput);
 
       return {
         success: true,
@@ -197,6 +198,8 @@ Output strictly valid JSON with this exact schema:
         compiledAt: new Date().toISOString()
       };
 
+      fallbackSpec.rule_groups = buildRuleGroupsFromSpec(fallbackSpec, cleanInput);
+
       return {
         success: true,
         needsClarification: false,
@@ -204,6 +207,164 @@ Output strictly valid JSON with this exact schema:
       };
     }
   }
+}
+
+function buildRuleGroupsFromSpec(spec, rawInstructions = '') {
+  const rules = [];
+  const lower = (rawInstructions || '').toLowerCase();
+
+  // 1. Candlestick patterns
+  if (spec.candle_patterns && spec.candle_patterns.length > 0) {
+    for (const c of spec.candle_patterns) {
+      rules.push({
+        id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        category: 'candle_pattern',
+        item: c.pattern || 'Hammer',
+        subField: '',
+        operator: 'is_detected',
+        timeframe: c.timeframe || '15m',
+        valueType: 'none',
+        value: null,
+        compareField: '',
+        action: 'entry_long_and',
+        warning: null
+      });
+    }
+  }
+
+  // 2. Alligator detection
+  if (lower.includes('alligator')) {
+    rules.push({
+      id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      category: 'indicator',
+      item: 'Alligator',
+      subField: 'lips',
+      operator: 'lips_crosses_above_teeth',
+      timeframe: '15m',
+      valueType: 'none',
+      value: null,
+      compareField: '',
+      action: 'entry_long_and',
+      warning: null
+    });
+  }
+
+  // 3. Indicators (RSI, EMA, MACD, Bollinger)
+  if (spec.indicators && spec.indicators.length > 0) {
+    for (const ind of spec.indicators) {
+      const type = ind.indicator_type?.toUpperCase() || 'RSI';
+      if (type === 'RSI') {
+        const isDiv = lower.includes('divergence');
+        rules.push({
+          id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          category: 'indicator',
+          item: 'RSI',
+          subField: '',
+          operator: isDiv ? 'in_bullish_divergence' : 'less_than',
+          timeframe: ind.timeframe || '15m',
+          valueType: isDiv ? 'none' : 'number',
+          value: isDiv ? null : (ind.params?.period === 14 ? 38 : (ind.compare_to || 38)),
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        });
+      } else if (type === 'EMA' || type === 'SMA') {
+        rules.push({
+          id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          category: 'indicator',
+          item: type,
+          subField: '',
+          operator: 'price_above_ema',
+          timeframe: ind.timeframe || '1h',
+          valueType: 'none',
+          value: null,
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        });
+      } else if (type === 'MACD') {
+        rules.push({
+          id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          category: 'indicator',
+          item: 'MACD',
+          subField: 'macd_line',
+          operator: 'macd_crosses_above_signal',
+          timeframe: ind.timeframe || '15m',
+          valueType: 'none',
+          value: null,
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        });
+      } else if (type === 'BOLLINGERBANDS' || type === 'BOLLINGER') {
+        rules.push({
+          id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          category: 'indicator',
+          item: 'BollingerBands',
+          subField: 'lower_band',
+          operator: 'price_touches_lower_band',
+          timeframe: ind.timeframe || '15m',
+          valueType: 'none',
+          value: null,
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        });
+      }
+    }
+  }
+
+  // 4. Session & News
+  if (spec.guardrails?.allowed_sessions && spec.guardrails.allowed_sessions.length > 0) {
+    rules.push({
+      id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      category: 'session_time',
+      item: 'CurrentSession',
+      subField: '',
+      operator: 'is_london_open',
+      timeframe: '15m',
+      valueType: 'none',
+      value: null,
+      compareField: '',
+      action: 'entry_long_and',
+      warning: null
+    });
+  }
+
+  return [
+    {
+      id: 'root-group-1',
+      combinator: 'AND',
+      rules: rules.length > 0 ? rules : [
+        {
+          id: `r-${Date.now()}`,
+          category: 'candle_pattern',
+          item: 'Hammer',
+          subField: '',
+          operator: 'is_detected',
+          timeframe: '15m',
+          valueType: 'none',
+          value: null,
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        },
+        {
+          id: `r-${Date.now()+1}`,
+          category: 'indicator',
+          item: 'RSI',
+          subField: '',
+          operator: 'less_than',
+          timeframe: '15m',
+          valueType: 'number',
+          value: 38,
+          compareField: '',
+          action: 'entry_long_and',
+          warning: null
+        }
+      ]
+    }
+  ];
 }
 
 module.exports = StrategyCompiler;
