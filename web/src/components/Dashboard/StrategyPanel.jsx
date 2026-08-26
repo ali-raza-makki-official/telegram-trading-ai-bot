@@ -59,8 +59,8 @@ export default function StrategyPanel({ onStrategySaved }) {
   const [instructions, setInstructions] = useState('');
   const [title, setTitle] = useState('');
 
-  // Sub-tabs: 'editor' | 'hud' | 'playbook' | 'tools' | 'backtest' | 'history'
-  const [activeSubTab, setActiveSubTab] = useState('editor');
+  // Sub-tabs: 'rules' | 'editor' | 'hud' | 'playbook' | 'tools' | 'backtest' | 'history'
+  const [activeSubTab, setActiveSubTab] = useState('rules');
   const [editorMode, setEditorMode] = useState('cascading'); // 'cascading' | 'text'
   const [ruleGroups, setRuleGroups] = useState([]);
 
@@ -413,7 +413,8 @@ export default function StrategyPanel({ onStrategySaved }) {
   const ruleCount = (instructions.match(/^[ \t]*[-*•\d+.]/gm) || []).length;
 
   const SUB_NAV_ITEMS = [
-    { id: 'editor', title: 'Strategy Editor', subtitle: 'Write rules & live test', icon: FileText },
+    { id: 'rules', title: 'Rules & Logic Builder', subtitle: '5-level cascading rule engine', icon: Sliders, color: 'text-gold' },
+    { id: 'editor', title: 'Strategy Directives', subtitle: 'Write rules & live test', icon: FileText, color: 'text-accent' },
     { id: 'hud', title: 'Live Rule Conformance', subtitle: 'Real-time rule matrix', icon: CheckCircle2, color: 'text-up' },
     { id: 'playbook', title: 'Operational Mandate', subtitle: 'Compiled AI playbook', icon: BookOpen, color: 'text-accent' },
     { id: 'tools', title: 'Actions & Tools', subtitle: 'Full registry & test console', icon: Wrench, color: 'text-gold' },
@@ -660,49 +661,30 @@ export default function StrategyPanel({ onStrategySaved }) {
         {/* WORKSPACE CONTENT PER ACTIVE TAB */}
         <div className="flex-1 flex overflow-hidden">
 
-          {/* TAB 1: STRATEGY EDITOR */}
+          {/* TAB 1: RULES & LOGIC BUILDER (FULL-SCREEN 5-LEVEL CASCADING RULE ENGINE) */}
+          {activeSubTab === 'rules' && (
+            <CascadingRuleEditor
+              ruleGroups={ruleGroups}
+              onChange={(newGroups) => setRuleGroups(newGroups)}
+              rawInstructions={instructions}
+            />
+          )}
+
+          {/* TAB 2: STRATEGY DIRECTIVES (NATURAL LANGUAGE TEXTAREA & AI COMPILER) */}
           {activeSubTab === 'editor' && (
             <div className="flex-1 flex overflow-hidden">
-              {/* Left: Cascading Builder or Textarea Editor */}
+              {/* Left: Textarea Editor & Inline Guidance */}
               <div className="flex-1 flex flex-col border-r border-borderHairline bg-bgBase overflow-hidden">
                 
-                {/* Title, Mode Switcher & Example Library Bar */}
+                {/* Title & Example Library Bar */}
                 <div className="p-2 px-3 bg-bgPanel border-b border-borderHairline flex items-center justify-between text-[11px]">
-                  <div className="flex items-center gap-3 w-1/2">
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Strategy Title..."
-                      className="bg-transparent font-bold text-textPrimary text-sm focus:outline-none px-2 py-0.5 rounded w-3/5"
-                    />
-
-                    {/* Mode Switcher */}
-                    <div className="flex items-center rounded-lg bg-bgElevated p-0.5 border border-borderHairline">
-                      <button
-                        onClick={() => setEditorMode('cascading')}
-                        className={`px-2.5 py-1 rounded text-[10px] font-bold transition flex items-center gap-1 ${
-                          editorMode === 'cascading'
-                            ? 'bg-gold text-black shadow-sm'
-                            : 'text-textMuted hover:text-textPrimary'
-                        }`}
-                      >
-                        <Sliders className="w-3 h-3" />
-                        <span>Visual Rule Builder</span>
-                      </button>
-                      <button
-                        onClick={() => setEditorMode('text')}
-                        className={`px-2.5 py-1 rounded text-[10px] font-bold transition flex items-center gap-1 ${
-                          editorMode === 'text'
-                            ? 'bg-accent text-white shadow-sm'
-                            : 'text-textMuted hover:text-textPrimary'
-                        }`}
-                      >
-                        <FileText className="w-3 h-3" />
-                        <span>Natural Language Prompt</span>
-                      </button>
-                    </div>
-                  </div>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Strategy Title..."
+                    className="bg-transparent font-bold text-textPrimary text-sm focus:outline-none px-2 py-0.5 rounded w-1/2"
+                  />
                   
                   <button
                     onClick={() => setShowExamples(!showExamples)}
@@ -740,29 +722,21 @@ export default function StrategyPanel({ onStrategySaved }) {
                   </div>
                 )}
 
-                {/* DUAL WORKSPACE: Visual Cascading Builder OR Raw Textarea */}
-                {editorMode === 'cascading' ? (
-                  <CascadingRuleEditor
-                    ruleGroups={ruleGroups}
-                    onChange={(newGroups) => setRuleGroups(newGroups)}
-                    rawInstructions={instructions}
-                  />
-                ) : (
-                  <textarea
-                    ref={textareaRef}
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="Write your custom trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Examples:&#10;1. 15m timeframe pe jab Hammer ya Bullish Engulfing candle bane aur RSI 38 se kam ho to BUY trade lo.&#10;2. Stop Loss candle wick ke 2 pips neechay rakho aur target 1:2.5 Risk to Reward.&#10;3. London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;4. Click 'Load Instructions & Compile' to preview what the AI understood before activating."
-                    className="flex-1 p-4 bg-transparent text-textPrimary font-mono text-[12px] leading-relaxed resize-none focus:outline-none selection:bg-gold/20"
-                    spellCheck="false"
-                  />
-                )}
+                {/* Textarea Editor */}
+                <textarea
+                  ref={textareaRef}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Write your custom trading strategy rules here in plain English or Roman Urdu...&#10;&#10;Examples:&#10;1. 15m timeframe pe jab Hammer ya Bullish Engulfing candle bane aur RSI 38 se kam ho to BUY trade lo.&#10;2. Stop Loss candle wick ke 2 pips neechay rakho aur target 1:2.5 Risk to Reward.&#10;3. London Open (07:00 - 10:00 UTC) aur NY Open mein trade lo.&#10;4. Click 'Load Instructions & Compile' to preview what the AI understood before activating."
+                  className="flex-1 p-4 bg-transparent text-textPrimary font-mono text-[12px] leading-relaxed resize-none focus:outline-none selection:bg-gold/20"
+                  spellCheck="false"
+                />
 
                 {/* Inline Guidance & Metrics Bar */}
                 <div className="p-2 px-3 bg-bgPanel border-t border-borderHairline flex items-center justify-between text-[10px] text-textMuted flex-shrink-0 tabular-nums">
                   <div className="flex items-center gap-2">
                     <HelpCircle className="w-3 h-3 text-accent" />
-                    <span><b>Two-Way Sync:</b> Changes in Visual Rule Builder sync into AI Execution AST in real time.</span>
+                    <span><b>Two-Way Sync:</b> Click &apos;Load Instructions &amp; Compile&apos; to auto-populate the Rules &amp; Logic Builder tab.</span>
                   </div>
 
                   <div className="flex items-center gap-3 font-mono">
