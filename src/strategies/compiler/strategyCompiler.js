@@ -142,7 +142,10 @@ Output strictly valid JSON with this exact schema:
 
       const spec = parsed.strategy_spec;
       spec.compiledAt = new Date().toISOString();
-      spec.rule_groups = buildRuleGroupsFromSpec(spec, cleanInput);
+      const compiledStructure = buildRuleGroupsFromSpec(spec, cleanInput);
+      spec.rule_groups = compiledStructure.rule_groups;
+      spec.group_combinator = 'AND';
+      spec.execution_gates = compiledStructure.execution_gates;
 
       return {
         success: true,
@@ -198,7 +201,10 @@ Output strictly valid JSON with this exact schema:
         compiledAt: new Date().toISOString()
       };
 
-      fallbackSpec.rule_groups = buildRuleGroupsFromSpec(fallbackSpec, cleanInput);
+      const compiledFallback = buildRuleGroupsFromSpec(fallbackSpec, cleanInput);
+      fallbackSpec.rule_groups = compiledFallback.rule_groups;
+      fallbackSpec.group_combinator = 'AND';
+      fallbackSpec.execution_gates = compiledFallback.execution_gates;
 
       return {
         success: true,
@@ -210,41 +216,50 @@ Output strictly valid JSON with this exact schema:
 }
 
 function buildRuleGroupsFromSpec(spec, rawInstructions = '') {
-  const rules = [];
+  const rawRules = [];
   const lower = (rawInstructions || '').toLowerCase();
 
-  // 1. Candlestick patterns
+  // Determine Primary Strategy Direction
+  const isShortStrategy = lower.includes('sell') || lower.includes('short') || lower.includes('shooting star') || lower.includes('bearish');
+  const isLongStrategy = lower.includes('buy') || lower.includes('long') || lower.includes('hammer') || lower.includes('bullish');
+  const defaultDirection = (isShortStrategy && !isLongStrategy) ? 'SHORT' : 'LONG';
+
+  // 1. Candlestick Patterns
   if (spec.candle_patterns && spec.candle_patterns.length > 0) {
     for (const c of spec.candle_patterns) {
-      rules.push({
+      const pName = c.pattern || 'Hammer';
+      const dir = pName.toLowerCase().includes('bearish') || pName.toLowerCase().includes('shooting') ? 'SHORT' : 'LONG';
+      rawRules.push({
         id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         category: 'candle_pattern',
-        item: c.pattern || 'Hammer',
+        item: pName,
         subField: '',
         operator: 'is_detected',
         timeframe: c.timeframe || '15m',
         valueType: 'none',
         value: null,
         compareField: '',
-        action: 'entry_long_and',
+        direction: dir,
+        action: dir === 'LONG' ? 'entry_long_and' : 'entry_short_and',
         warning: null
       });
     }
   }
 
-  // 2. Alligator detection
+  // 2. Alligator Detection
   if (lower.includes('alligator')) {
-    rules.push({
+    rawRules.push({
       id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       category: 'indicator',
       item: 'Alligator',
       subField: 'lips',
-      operator: 'lips_crosses_above_teeth',
+      operator: defaultDirection === 'SHORT' ? 'lips_crosses_below_teeth' : 'lips_crosses_above_teeth',
       timeframe: '15m',
       valueType: 'none',
       value: null,
       compareField: '',
-      action: 'entry_long_and',
+      direction: defaultDirection,
+      action: defaultDirection === 'LONG' ? 'entry_long_and' : 'entry_short_and',
       warning: null
     });
   }
@@ -255,116 +270,151 @@ function buildRuleGroupsFromSpec(spec, rawInstructions = '') {
       const type = ind.indicator_type?.toUpperCase() || 'RSI';
       if (type === 'RSI') {
         const isDiv = lower.includes('divergence');
-        rules.push({
+        const dir = (lower.includes('bearish') || isShortStrategy) ? 'SHORT' : 'LONG';
+        rawRules.push({
           id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           category: 'indicator',
           item: 'RSI',
           subField: '',
-          operator: isDiv ? 'in_bullish_divergence' : 'less_than',
+          operator: isDiv ? (dir === 'LONG' ? 'in_bullish_divergence' : 'in_bearish_divergence') : (dir === 'SHORT' ? 'greater_than' : 'less_than'),
           timeframe: ind.timeframe || '15m',
           valueType: isDiv ? 'none' : 'number',
-          value: isDiv ? null : (ind.params?.period === 14 ? 38 : (ind.compare_to || 38)),
+          value: isDiv ? null : (dir === 'SHORT' ? 62 : 38),
           compareField: '',
-          action: 'entry_long_and',
+          direction: dir,
+          action: dir === 'LONG' ? 'entry_long_and' : 'entry_short_and',
           warning: null
         });
       } else if (type === 'EMA' || type === 'SMA') {
-        rules.push({
+        rawRules.push({
           id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           category: 'indicator',
           item: type,
           subField: '',
-          operator: 'price_above_ema',
+          operator: defaultDirection === 'SHORT' ? 'price_below_ema' : 'price_above_ema',
           timeframe: ind.timeframe || '1h',
           valueType: 'none',
           value: null,
           compareField: '',
-          action: 'entry_long_and',
+          direction: defaultDirection,
+          action: defaultDirection === 'LONG' ? 'entry_long_and' : 'entry_short_and',
           warning: null
         });
       } else if (type === 'MACD') {
-        rules.push({
+        rawRules.push({
           id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           category: 'indicator',
           item: 'MACD',
           subField: 'macd_line',
-          operator: 'macd_crosses_above_signal',
+          operator: defaultDirection === 'SHORT' ? 'macd_crosses_below_signal' : 'macd_crosses_above_signal',
           timeframe: ind.timeframe || '15m',
           valueType: 'none',
           value: null,
           compareField: '',
-          action: 'entry_long_and',
+          direction: defaultDirection,
+          action: defaultDirection === 'LONG' ? 'entry_long_and' : 'entry_short_and',
           warning: null
         });
       } else if (type === 'BOLLINGERBANDS' || type === 'BOLLINGER') {
-        rules.push({
+        rawRules.push({
           id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           category: 'indicator',
           item: 'BollingerBands',
-          subField: 'lower_band',
-          operator: 'price_touches_lower_band',
+          subField: defaultDirection === 'SHORT' ? 'upper_band' : 'lower_band',
+          operator: defaultDirection === 'SHORT' ? 'price_touches_upper_band' : 'price_touches_lower_band',
           timeframe: ind.timeframe || '15m',
           valueType: 'none',
           value: null,
           compareField: '',
-          action: 'entry_long_and',
+          direction: defaultDirection,
+          action: defaultDirection === 'LONG' ? 'entry_long_and' : 'entry_short_and',
           warning: null
         });
       }
     }
   }
 
-  // 4. Session & News
-  if (spec.guardrails?.allowed_sessions && spec.guardrails.allowed_sessions.length > 0) {
-    rules.push({
-      id: `r-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      category: 'session_time',
-      item: 'CurrentSession',
-      subField: '',
-      operator: 'is_london_open',
-      timeframe: '15m',
-      valueType: 'none',
-      value: null,
-      compareField: '',
-      action: 'entry_long_and',
-      warning: null
-    });
+  // FIX #2: Deduplicate rules to prevent repeated condition rows
+  const seen = new Set();
+  const dedupedRules = [];
+  for (const r of rawRules) {
+    const key = `${r.category}_${r.item}_${r.subField}_${r.operator}_${r.timeframe}_${r.value}_${r.direction}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      dedupedRules.push(r);
+    }
   }
 
-  return [
+  // FIX #1: Mandatory Execution Gates (Separated from Signal Triggers)
+  const execution_gates = [
     {
-      id: 'root-group-1',
-      combinator: 'AND',
-      rules: rules.length > 0 ? rules : [
-        {
-          id: `r-${Date.now()}`,
-          category: 'candle_pattern',
-          item: 'Hammer',
-          subField: '',
-          operator: 'is_detected',
-          timeframe: '15m',
-          valueType: 'none',
-          value: null,
-          compareField: '',
-          action: 'entry_long_and',
-          warning: null
-        },
-        {
-          id: `r-${Date.now()+1}`,
-          category: 'indicator',
-          item: 'RSI',
-          subField: '',
-          operator: 'less_than',
-          timeframe: '15m',
-          valueType: 'number',
-          value: 38,
-          compareField: '',
-          action: 'entry_long_and',
-          warning: null
-        }
-      ]
+      id: 'gate-session',
+      category: 'session_time',
+      item: 'CurrentSession',
+      operator: 'is_london_open',
+      label: 'Session Window: London Open (07:00-10:00 UTC) or NY Open (12:00-15:00 UTC)',
+      status: 'MANDATORY_AND_GATE',
+      timeframe: '15m'
+    },
+    {
+      id: 'gate-spread',
+      category: 'account_state',
+      item: 'CurrentSpread',
+      operator: 'less_than_pips',
+      value: spec.guardrails?.max_spread_pips || 3.0,
+      label: `Spread Guard: Live spread <= ${spec.guardrails?.max_spread_pips || 3.0} pips`,
+      status: 'MANDATORY_AND_GATE'
+    },
+    {
+      id: 'gate-news',
+      category: 'session_time',
+      item: 'NewsBlackout',
+      operator: 'no_high_impact_news_30m',
+      label: 'News Filter: No USD High-Impact News event within +/- 30 min',
+      status: 'MANDATORY_AND_GATE'
     }
   ];
+
+  return {
+    rule_groups: [
+      {
+        id: 'root-group-1',
+        name: 'Primary Entry Signal Criteria',
+        combinator: 'AND',
+        rules: dedupedRules.length > 0 ? dedupedRules : [
+          {
+            id: `r-${Date.now()}`,
+            category: 'candle_pattern',
+            item: 'Hammer',
+            subField: '',
+            operator: 'is_detected',
+            timeframe: '15m',
+            valueType: 'none',
+            value: null,
+            compareField: '',
+            direction: 'LONG',
+            action: 'entry_long_and',
+            warning: null
+          },
+          {
+            id: `r-${Date.now()+1}`,
+            category: 'indicator',
+            item: 'RSI',
+            subField: '',
+            operator: 'less_than',
+            timeframe: '15m',
+            valueType: 'number',
+            value: 38,
+            compareField: '',
+            direction: 'LONG',
+            action: 'entry_long_and',
+            warning: null
+          }
+        ]
+      }
+    ],
+    execution_gates
+  };
 }
 
 module.exports = StrategyCompiler;

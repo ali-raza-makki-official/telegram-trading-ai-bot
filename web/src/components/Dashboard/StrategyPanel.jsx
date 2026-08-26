@@ -243,8 +243,11 @@ export default function StrategyPanel({ onStrategySaved }) {
           showToast(`Clarification needed: ${data.clarification?.question_to_user}`, 'warn');
           return;
         }
-        setPreviewSpec(data.previewSpec);
-        setShowPreviewModal(true);
+        if (data.previewSpec) {
+          if (data.previewSpec.rule_groups) setRuleGroups(data.previewSpec.rule_groups);
+          setPreviewSpec(data.previewSpec);
+          setShowPreviewModal(true);
+        }
       } else {
         showToast('Compilation error', 'error');
       }
@@ -665,7 +668,15 @@ export default function StrategyPanel({ onStrategySaved }) {
           {activeSubTab === 'rules' && (
             <CascadingRuleEditor
               ruleGroups={ruleGroups}
+              executionGates={currentStrategy?.compiledPlaybook?.execution_gates || []}
+              riskParameters={currentStrategy?.compiledPlaybook?.risk_parameters || {}}
+              groupCombinator={currentStrategy?.compiledPlaybook?.group_combinator || 'AND'}
               onChange={(newGroups) => setRuleGroups(newGroups)}
+              onRiskChange={(updatedRisk) => {
+                if (currentStrategy?.compiledPlaybook) {
+                  currentStrategy.compiledPlaybook.risk_parameters = updatedRisk;
+                }
+              }}
               rawInstructions={instructions}
             />
           )}

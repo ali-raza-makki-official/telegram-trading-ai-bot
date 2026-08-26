@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   RULE_CATEGORIES,
   RULE_ITEMS_BY_CATEGORY,
@@ -11,21 +11,46 @@ import {
 import {
   Plus, Trash2, Layers, AlertTriangle, HelpCircle, Check,
   CornerDownRight, Copy, Code2, Sparkles, Sliders, ChevronRight,
-  GitBranch, GitCommit, Split
+  GitBranch, GitCommit, Split, ShieldCheck, ShieldAlert, Shield,
+  ArrowUpRight, ArrowDownRight, CheckCircle2, XCircle, Clock,
+  DollarSign, Target, Percent, Lock, Unlock, Zap, Flame, Radio
 } from 'lucide-react';
+
+const DIRECTION_OPTIONS = [
+  { id: 'LONG', label: '🟢 Long Entry (BUY)', color: 'text-up bg-up/15 border-up/30' },
+  { id: 'SHORT', label: '🔴 Short Entry (SELL)', color: 'text-down bg-down/15 border-down/30' },
+  { id: 'EXIT', label: '🚪 Exit Condition', color: 'text-accent bg-accent/15 border-accent/30' },
+  { id: 'INVALIDATION', label: '🚫 Invalidation Rule', color: 'text-warn bg-warn/15 border-warn/30' },
+];
 
 export default function CascadingRuleEditor({
   ruleGroups = [],
+  executionGates = [],
+  groupCombinator = 'AND',
+  riskParameters = {},
   onChange,
-  onCompileFromText,
+  onRiskChange,
   rawInstructions = '',
 }) {
+  const [interGroupCombinator, setInterGroupCombinator] = useState(groupCombinator || 'AND');
+
+  // Risk & Exit state
+  const [riskState, setRiskState] = useState({
+    risk_percent_per_trade: riskParameters?.risk_percent_per_trade ?? 1.0,
+    sl_value: riskParameters?.sl_value ?? 20,
+    sl_type: riskParameters?.sl_type ?? 'swing_wick',
+    tp_value: riskParameters?.tp_value ?? 2.5,
+    max_open_trades: riskParameters?.max_open_trades ?? 2,
+    move_sl_to_be_r: riskParameters?.move_sl_to_be_r ?? 1.0,
+  });
+
   // Ensure default root group if empty
   const groups = useMemo(() => {
     if (!ruleGroups || ruleGroups.length === 0) {
       return [
         {
           id: 'root-group-1',
+          name: 'Primary Signal Criteria',
           combinator: 'AND',
           rules: [
             {
@@ -38,6 +63,7 @@ export default function CascadingRuleEditor({
               valueType: 'none',
               value: null,
               compareField: '',
+              direction: 'LONG',
               action: 'entry_long_and',
               warning: null,
             },
@@ -51,6 +77,7 @@ export default function CascadingRuleEditor({
               valueType: 'number',
               value: 38,
               compareField: '',
+              direction: 'LONG',
               action: 'entry_long_and',
               warning: null,
             },
@@ -64,19 +91,7 @@ export default function CascadingRuleEditor({
               valueType: 'none',
               value: null,
               compareField: '',
-              action: 'entry_long_and',
-              warning: null,
-            },
-            {
-              id: 'r-4',
-              category: 'session_time',
-              item: 'CurrentSession',
-              subField: '',
-              operator: 'is_london_open',
-              timeframe: '15m',
-              valueType: 'none',
-              value: null,
-              compareField: '',
+              direction: 'LONG',
               action: 'entry_long_and',
               warning: null,
             },
@@ -87,8 +102,39 @@ export default function CascadingRuleEditor({
     return ruleGroups;
   }, [ruleGroups]);
 
+  // Default execution gates if none provided
+  const gates = useMemo(() => {
+    if (executionGates && executionGates.length > 0) return executionGates;
+    return [
+      {
+        id: 'gate-session',
+        label: 'London Open (07:00-10:00 UTC) or NY Open (12:00-15:00 UTC)',
+        category: 'Session Filter',
+        status: 'MANDATORY_AND_GATE',
+      },
+      {
+        id: 'gate-spread',
+        label: 'Live Broker Spread <= 3.0 pips',
+        category: 'Spread Guard',
+        status: 'MANDATORY_AND_GATE',
+      },
+      {
+        id: 'gate-news',
+        label: 'No High-Impact USD News (+/- 30 min)',
+        category: 'News Blackout',
+        status: 'MANDATORY_AND_GATE',
+      },
+    ];
+  }, [executionGates]);
+
   const updateGroups = (newGroups) => {
-    if (onChange) onChange(newGroups);
+    if (onChange) onChange(newGroups, interGroupCombinator);
+  };
+
+  const handleRiskFieldChange = (key, val) => {
+    const updated = { ...riskState, [key]: val };
+    setRiskState(updated);
+    if (onRiskChange) onRiskChange(updated);
   };
 
   // Helper to change combinator of a group
@@ -111,6 +157,7 @@ export default function CascadingRuleEditor({
       valueType: 'number',
       value: 38,
       compareField: '',
+      direction: 'LONG',
       action: 'entry_long_and',
       warning: null,
     };
@@ -128,7 +175,8 @@ export default function CascadingRuleEditor({
   const handleAddGroup = () => {
     const newGroup = {
       id: `grp-${Date.now()}`,
-      combinator: 'OR',
+      name: `Secondary Confluence Group #${groups.length + 1}`,
+      combinator: 'AND',
       rules: [
         {
           id: `r-${Date.now()}`,
@@ -140,6 +188,7 @@ export default function CascadingRuleEditor({
           valueType: 'none',
           value: null,
           compareField: '',
+          direction: 'LONG',
           action: 'entry_long_and',
           warning: null,
         },
@@ -187,7 +236,7 @@ export default function CascadingRuleEditor({
             valueType: firstOp.valueType,
             value: firstOp.defaultVal ?? null,
             compareField: firstOp.defaultCompare ?? '',
-            warning: null, // clear warning upon manual edit
+            warning: null,
           };
         }),
       };
@@ -258,7 +307,7 @@ export default function CascadingRuleEditor({
     updateGroups(next);
   };
 
-  // LEVEL 4 CASCADE: Change Value / Compare Field / Timeframe
+  // Change Value / Direction / Timeframe
   const handleFieldChange = (groupId, ruleId, key, val) => {
     const next = groups.map((g) => {
       if (g.id !== groupId) return g;
@@ -270,8 +319,64 @@ export default function CascadingRuleEditor({
     updateGroups(next);
   };
 
-  // Real-time live English summary generation
+  // FIX #6: Automatic Validation Pass & Sanity Check
+  const validationResult = useMemo(() => {
+    const issues = [];
+
+    // Check Stop Loss
+    if (!riskState.sl_value || Number(riskState.sl_value) <= 0) {
+      issues.push({ type: 'error', text: 'No Stop Loss defined. Trading without SL is blocked for capital protection.' });
+    }
+
+    // Check Take Profit
+    if (!riskState.tp_value || Number(riskState.tp_value) <= 0) {
+      issues.push({ type: 'error', text: 'No Take Profit Target ratio defined (minimum 1:1.5 RR recommended).' });
+    }
+
+    // Check Condition Duplication
+    const seen = new Set();
+    let hasDuplicate = false;
+    groups.forEach((g) => {
+      g.rules.forEach((r) => {
+        const sig = `${r.category}-${r.item}-${r.subField}-${r.operator}-${r.timeframe}-${r.value}-${r.direction}`;
+        if (seen.has(sig)) hasDuplicate = true;
+        seen.add(sig);
+      });
+    });
+    if (hasDuplicate) {
+      issues.push({ type: 'warn', text: 'Duplicate condition detected in rule tree. Merge repeated rows to prevent redundant compute.' });
+    }
+
+    // Check if session condition is inside an OR group
+    groups.forEach((g, idx) => {
+      if (g.combinator === 'OR') {
+        const hasSession = g.rules.some((r) => r.category === 'session_time');
+        const hasSignal = g.rules.some((r) => r.category === 'indicator' || r.category === 'candle_pattern');
+        if (hasSession && hasSignal) {
+          issues.push({ type: 'error', text: `Group #${idx + 1} has Session filter in an OR group with Signals. Session must be a mandatory AND gate.` });
+        }
+      }
+    });
+
+    // Check directions
+    const allRules = groups.flatMap((g) => g.rules);
+    const hasLong = allRules.some((r) => r.direction === 'LONG');
+    const hasShort = allRules.some((r) => r.direction === 'SHORT');
+    if (!hasLong && !hasShort) {
+      issues.push({ type: 'error', text: 'No entry direction specified (all conditions must designate Long or Short).' });
+    }
+
+    return {
+      isValid: issues.filter((i) => i.type === 'error').length === 0,
+      issues,
+    };
+  }, [groups, riskState]);
+
+  // Real-time live English summary generation (including Gates & Risk)
   const livePlainEnglishSummary = useMemo(() => {
+    const gateTexts = gates.map((gate) => gate.label || gate.category);
+    const gateSummary = `[GATES: ${gateTexts.join(' AND ')}]`;
+
     const groupTexts = groups.map((g) => {
       const ruleTexts = g.rules.map((r) => {
         const itemConfig = OPERATOR_REGISTRY[r.item] || { operators: [] };
@@ -284,244 +389,433 @@ export default function CascadingRuleEditor({
         else if (r.valueType === 'compare_field' && r.compareField) valStr = ` ${r.compareField}`;
 
         const subFieldLabel = r.subField ? `.${r.subField}` : '';
-        return `${r.item}${subFieldLabel} ${tf} ${opLabel}${valStr}`;
+        const dirLabel = r.direction ? `(${r.direction}) ` : '';
+        return `${dirLabel}${r.item}${subFieldLabel} ${tf} ${opLabel}${valStr}`;
       });
 
       return `(${ruleTexts.join(` ${g.combinator} `)})`;
     });
 
-    return groupTexts.join(' AND ');
-  }, [groups]);
+    const signalSummary = groupTexts.join(` ${interGroupCombinator} `);
+    const riskSummary = `[RISK: ${riskState.risk_percent_per_trade}% | SL: ${riskState.sl_value} pips | TP: 1:${riskState.tp_value} RR]`;
+
+    return `${gateSummary} ➔ IF ${signalSummary} ➔ ${riskSummary}`;
+  }, [groups, gates, interGroupCombinator, riskState]);
 
   return (
     <div className="flex-1 flex flex-col bg-bgBase overflow-y-auto p-4 space-y-4 font-mono text-xs select-none">
       
-      {/* LIVE PLAIN-ENGLISH SUMMARY BANNER */}
+      {/* 1. LIVE PLAIN-ENGLISH SUMMARY BANNER */}
       <div className="p-3.5 rounded-xl bg-bgPanel border-l-4 border-l-gold space-y-1.5 shadow-md">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold text-gold uppercase tracking-wider flex items-center gap-1.5 font-sans">
             <Sparkles className="w-3.5 h-3.5 text-gold" />
-            Live Compiled Rule Logic (Source of Truth)
+            Live Compiled Strategy Mandate (Source of Truth)
           </span>
           <span className="text-[9px] px-2 py-0.5 rounded bg-gold/15 text-gold font-bold">
-            SYNCED TO ENGINE
+            DETERMINISTIC ENGINE
           </span>
         </div>
         <p className="text-xs font-sans text-textPrimary leading-relaxed font-semibold">
-          {livePlainEnglishSummary || 'No rules configured yet.'}
+          {livePlainEnglishSummary}
         </p>
       </div>
 
-      {/* NESTED AND/OR RULE BUILDER */}
+      {/* 2. SANITY VALIDATION BANNER (Fix 6) */}
+      <div className={`p-3 rounded-xl flex items-start gap-2.5 font-sans ${
+        validationResult.isValid
+          ? 'bg-up/10 text-up border border-up/20'
+          : 'bg-warn/15 text-warn border border-warn/30'
+      }`}>
+        {validationResult.isValid ? (
+          <CheckCircle2 className="w-5 h-5 text-up flex-shrink-0 mt-0.5" />
+        ) : (
+          <ShieldAlert className="w-5 h-5 text-warn flex-shrink-0 mt-0.5" />
+        )}
+        <div className="flex-1 text-xs">
+          <div className="font-bold flex items-center gap-2">
+            <span>{validationResult.isValid ? '✅ All Rule Conditions & Risk Parameters Validated' : '⚠️ Strategy Validation Warnings Identified'}</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/40 font-mono">
+              {validationResult.issues.length === 0 ? 'READY FOR LIVE' : `${validationResult.issues.length} Items to Review`}
+            </span>
+          </div>
+          {validationResult.issues.length > 0 && (
+            <ul className="mt-1 space-y-1 text-[11px] opacity-90">
+              {validationResult.issues.map((iss, i) => (
+                <li key={i} className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-warn" />
+                  <span>{iss.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* 3. PINNED EXECUTION GATES SECTION (Fix 1) */}
+      <div className="p-4 rounded-xl bg-bgPanel border border-borderHairline space-y-2.5 shadow-md">
+        <div className="flex items-center justify-between border-b border-borderHairline pb-2">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-cyan-400" />
+            <span className="font-bold text-textPrimary text-xs uppercase font-sans">
+              1. Execution Gates & Environment Filters (Mandatory AND-Gate)
+            </span>
+          </div>
+          <span className="text-[9px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-bold">
+            ALWAYS EVALUATED FIRST
+          </span>
+        </div>
+        <p className="text-[10px] text-textMuted font-sans leading-relaxed">
+          These environmental filters must ALL pass simultaneously before any signal logic is checked. Session and news conditions can never be satisfied in isolation.
+        </p>
+
+        <div className="grid grid-cols-3 gap-2 pt-1 font-sans">
+          {gates.map((gate) => (
+            <div key={gate.id} className="p-2.5 rounded-lg bg-bgElevated border border-borderHairline flex items-center gap-2 text-xs">
+              <Check className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+              <div className="truncate">
+                <div className="font-bold text-textPrimary text-[11px] truncate">{gate.category}</div>
+                <div className="text-[9px] text-textMuted truncate">{gate.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. SIGNAL TRIGGER LOGIC GROUPS WITH INTER-GROUP CONNECTORS (Fix 1, 3, 4) */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-gold" />
+            <span className="font-bold text-textPrimary text-xs uppercase font-sans">
+              2. Technical Signal Trigger Logic Groups
+            </span>
+          </div>
+          <span className="text-[10px] text-textMuted font-mono">
+            {groups.length} Condition Group{groups.length > 1 ? 's' : ''}
+          </span>
+        </div>
+
         {groups.map((group, gIdx) => (
-          <div
-            key={group.id}
-            className="p-4 rounded-xl bg-bgPanel border border-borderHairline space-y-3 shadow-md"
-          >
-            {/* Group Combinator Header */}
-            <div className="flex items-center justify-between border-b border-borderHairline pb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase text-textMuted font-sans">
-                  Group #{gIdx + 1} Match:
-                </span>
-                
-                <div className="flex items-center rounded-lg bg-bgElevated p-0.5 border border-borderHairline">
+          <React.Fragment key={group.id}>
+            
+            {/* FIX 4: INTER-GROUP CONNECTOR (Rendered between group cards) */}
+            {gIdx > 0 && (
+              <div className="flex items-center justify-center my-2">
+                <div className="flex items-center gap-2 bg-bgPanel px-4 py-1.5 rounded-full border border-borderHairline shadow-md font-sans">
+                  <Split className="w-3.5 h-3.5 text-gold" />
+                  <span className="text-[10px] font-bold text-textMuted uppercase">
+                    Relationship Between Group #{gIdx} and Group #{gIdx + 1}:
+                  </span>
+                  <div className="flex items-center rounded bg-bgElevated p-0.5">
+                    <button
+                      onClick={() => setInterGroupCombinator('AND')}
+                      className={`px-2.5 py-0.5 rounded text-[9px] font-bold transition ${
+                        interGroupCombinator === 'AND' ? 'bg-up text-white' : 'text-textMuted hover:text-textPrimary'
+                      }`}
+                    >
+                      AND (BOTH GROUPS)
+                    </button>
+                    <button
+                      onClick={() => setInterGroupCombinator('OR')}
+                      className={`px-2.5 py-0.5 rounded text-[9px] font-bold transition ${
+                        interGroupCombinator === 'OR' ? 'bg-gold text-black' : 'text-textMuted hover:text-textPrimary'
+                      }`}
+                    >
+                      OR (EITHER GROUP)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* GROUP CARD */}
+            <div className="p-4 rounded-xl bg-bgPanel border border-borderHairline space-y-3 shadow-md">
+              {/* Group Header */}
+              <div className="flex items-center justify-between border-b border-borderHairline pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase text-textMuted font-sans">
+                    Group #{gIdx + 1} ({group.name || 'Signal Set'}):
+                  </span>
+                  
+                  <div className="flex items-center rounded-lg bg-bgElevated p-0.5 border border-borderHairline">
+                    <button
+                      onClick={() => handleCombinatorChange(group.id, 'AND')}
+                      className={`px-3 py-1 rounded text-[10px] font-bold transition ${
+                        group.combinator === 'AND'
+                          ? 'bg-up text-white shadow-sm'
+                          : 'text-textMuted hover:text-textPrimary'
+                      }`}
+                    >
+                      ALL CONDITIONS (AND)
+                    </button>
+                    <button
+                      onClick={() => handleCombinatorChange(group.id, 'OR')}
+                      className={`px-3 py-1 rounded text-[10px] font-bold transition ${
+                        group.combinator === 'OR'
+                          ? 'bg-gold text-black shadow-sm'
+                          : 'text-textMuted hover:text-textPrimary'
+                      }`}
+                    >
+                      ANY CONDITION (OR)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleCombinatorChange(group.id, 'AND')}
-                    className={`px-3 py-1 rounded text-[10px] font-bold transition ${
-                      group.combinator === 'AND'
-                        ? 'bg-up text-white shadow-sm'
-                        : 'text-textMuted hover:text-textPrimary'
-                    }`}
+                    onClick={() => handleAddRule(group.id)}
+                    className="px-2.5 py-1 rounded bg-bgElevated hover:bg-bgHover text-gold text-[10px] font-bold flex items-center gap-1 transition"
                   >
-                    ALL (AND)
+                    <Plus className="w-3 h-3" />
+                    <span>Add Signal Condition</span>
                   </button>
-                  <button
-                    onClick={() => handleCombinatorChange(group.id, 'OR')}
-                    className={`px-3 py-1 rounded text-[10px] font-bold transition ${
-                      group.combinator === 'OR'
-                        ? 'bg-gold text-black shadow-sm'
-                        : 'text-textMuted hover:text-textPrimary'
-                    }`}
-                  >
-                    ANY (OR)
-                  </button>
+
+                  {groups.length > 1 && (
+                    <button
+                      onClick={() => handleDeleteGroup(group.id)}
+                      className="p-1 rounded bg-down/10 hover:bg-down/20 text-down text-[10px] transition"
+                      title="Delete Group"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleAddRule(group.id)}
-                  className="px-2.5 py-1 rounded bg-bgElevated hover:bg-bgHover text-gold text-[10px] font-bold flex items-center gap-1 transition"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Add Condition</span>
-                </button>
+              {/* Condition Rows */}
+              <div className="space-y-2.5">
+                {group.rules.map((rule) => {
+                  const availableItems = RULE_ITEMS_BY_CATEGORY[rule.category] || [];
+                  const itemConfig = OPERATOR_REGISTRY[rule.item] || { subFields: [], operators: [] };
+                  const hasSubFields = itemConfig.subFields && itemConfig.subFields.length > 0;
 
-                {groups.length > 1 && (
-                  <button
-                    onClick={() => handleDeleteGroup(group.id)}
-                    className="p-1 rounded bg-down/10 hover:bg-down/20 text-down text-[10px] transition"
-                    title="Delete Group"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+                  return (
+                    <div
+                      key={rule.id}
+                      className="p-3 rounded-lg bg-bgElevated border border-borderHairline hover:border-gold/30 transition flex flex-col space-y-2"
+                    >
+                      {/* Warning Flag */}
+                      {rule.warning && (
+                        <div className="p-1.5 px-2 rounded bg-warn/15 text-warn text-[10px] flex items-center gap-1.5 font-sans">
+                          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span><b>AI Mapping Note:</b> {rule.warning}</span>
+                        </div>
+                      )}
 
-            {/* Condition Rows */}
-            <div className="space-y-2.5">
-              {group.rules.map((rule, rIdx) => {
-                const availableItems = RULE_ITEMS_BY_CATEGORY[rule.category] || [];
-                const itemConfig = OPERATOR_REGISTRY[rule.item] || { subFields: [], operators: [] };
-                const hasSubFields = itemConfig.subFields && itemConfig.subFields.length > 0;
-
-                return (
-                  <div
-                    key={rule.id}
-                    className="p-3 rounded-lg bg-bgElevated border border-borderHairline hover:border-gold/30 transition flex flex-col space-y-2"
-                  >
-                    {/* Uncertainty / Ambiguity Warning Flag */}
-                    {rule.warning && (
-                      <div className="p-1.5 px-2 rounded bg-warn/15 text-warn text-[10px] flex items-center gap-1.5 font-sans">
-                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span><b>AI Mapping Note:</b> {rule.warning}</span>
-                      </div>
-                    )}
-
-                    {/* Cascading 5-Level Input Bar */}
-                    <div className="grid grid-cols-12 gap-2 items-center">
-                      
-                      {/* LEVEL 1: CATEGORY (2 cols) */}
-                      <div className="col-span-2 space-y-0.5">
-                        <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">1. Category</label>
-                        <select
-                          value={rule.category}
-                          onChange={(e) => handleCategoryChange(group.id, rule.id, e.target.value)}
-                          className="w-full bg-bgPanel text-textPrimary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
-                        >
-                          {RULE_CATEGORIES.map((cat) => (
-                            <option key={cat.id} value={cat.id}>{cat.label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* LEVEL 2: SPECIFIC ITEM (2 cols) */}
-                      <div className="col-span-2 space-y-0.5">
-                        <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">2. Specific Item</label>
-                        <select
-                          value={rule.item}
-                          onChange={(e) => handleItemChange(group.id, rule.id, e.target.value)}
-                          className="w-full bg-bgPanel text-gold font-bold rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
-                        >
-                          {availableItems.map((item) => (
-                            <option key={item.id} value={item.id}>{item.label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* TIMEFRAME (1 col) */}
-                      <div className="col-span-1 space-y-0.5">
-                        <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Timeframe</label>
-                        <select
-                          value={rule.timeframe || '15m'}
-                          onChange={(e) => handleFieldChange(group.id, rule.id, 'timeframe', e.target.value)}
-                          className="w-full bg-bgPanel text-textSecondary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
-                        >
-                          {TIMEFRAMES.map((tf) => (
-                            <option key={tf.id} value={tf.id}>{tf.label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* LEVEL 3: SUB-FIELD (if applicable) & CUSTOM OPERATOR (4 cols) */}
-                      <div className="col-span-4 space-y-0.5">
-                        <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">3. Custom Technical Operator</label>
-                        <div className="flex items-center gap-1.5">
-                          {hasSubFields && (
-                            <select
-                              value={rule.subField || itemConfig.subFields[0].id}
-                              onChange={(e) => handleSubFieldChange(group.id, rule.id, e.target.value)}
-                              className="w-1/3 bg-bgPanel text-accent rounded p-1.5 text-[10px] focus:outline-none border border-borderHairline"
-                            >
-                              {itemConfig.subFields.map((sf) => (
-                                <option key={sf.id} value={sf.id}>{sf.label}</option>
-                              ))}
-                            </select>
-                          )}
-
+                      {/* Cascading 6-Level Input Bar (With Direction Column) */}
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        
+                        {/* FIX 3: SIGNAL DIRECTION COLUMN (2 cols) */}
+                        <div className="col-span-2 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Direction</label>
                           <select
-                            value={rule.operator}
-                            onChange={(e) => handleOperatorChange(group.id, rule.id, e.target.value)}
-                            className="flex-1 bg-bgPanel text-textPrimary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                            value={rule.direction || 'LONG'}
+                            onChange={(e) => handleFieldChange(group.id, rule.id, 'direction', e.target.value)}
+                            className="w-full bg-bgPanel text-textPrimary font-bold rounded p-1.5 text-[10px] focus:outline-none border border-borderHairline"
                           >
-                            {itemConfig.operators.map((op) => (
-                              <option key={op.id} value={op.id}>{op.label}</option>
+                            {DIRECTION_OPTIONS.map((opt) => (
+                              <option key={opt.id} value={opt.id}>{opt.label}</option>
                             ))}
                           </select>
                         </div>
-                      </div>
 
-                      {/* LEVEL 4: VALUE / COMPARISON (2 cols) */}
-                      <div className="col-span-2 space-y-0.5">
-                        <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">4. Threshold / Target</label>
-                        {rule.valueType === 'number' ? (
-                          <input
-                            type="number"
-                            step="any"
-                            value={rule.value ?? ''}
-                            onChange={(e) => handleFieldChange(group.id, rule.id, 'value', Number(e.target.value))}
-                            className="w-full bg-bgPanel text-up font-bold rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
-                            placeholder="Value..."
-                          />
-                        ) : rule.valueType === 'compare_field' ? (
-                          <input
-                            type="text"
-                            value={rule.compareField ?? ''}
-                            onChange={(e) => handleFieldChange(group.id, rule.id, 'compareField', e.target.value)}
-                            className="w-full bg-bgPanel text-accent rounded p-1.5 text-[10px] focus:outline-none border border-borderHairline"
-                            placeholder="e.g. EMA_200"
-                          />
-                        ) : (
-                          <div className="p-1.5 text-[10px] text-textMuted bg-bgPanel/50 rounded text-center border border-borderHairline">
-                            Self-contained
+                        {/* LEVEL 1: CATEGORY (2 cols) */}
+                        <div className="col-span-2 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Category</label>
+                          <select
+                            value={rule.category}
+                            onChange={(e) => handleCategoryChange(group.id, rule.id, e.target.value)}
+                            className="w-full bg-bgPanel text-textPrimary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                          >
+                            {RULE_CATEGORIES.map((cat) => (
+                              <option key={cat.id} value={cat.id}>{cat.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* LEVEL 2: SPECIFIC ITEM (2 cols) */}
+                        <div className="col-span-2 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Item</label>
+                          <select
+                            value={rule.item}
+                            onChange={(e) => handleItemChange(group.id, rule.id, e.target.value)}
+                            className="w-full bg-bgPanel text-gold font-bold rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                          >
+                            {availableItems.map((item) => (
+                              <option key={item.id} value={item.id}>{item.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* TIMEFRAME (1 col) */}
+                        <div className="col-span-1 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">TF</label>
+                          <select
+                            value={rule.timeframe || '15m'}
+                            onChange={(e) => handleFieldChange(group.id, rule.id, 'timeframe', e.target.value)}
+                            className="w-full bg-bgPanel text-textSecondary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                          >
+                            {TIMEFRAMES.map((tf) => (
+                              <option key={tf.id} value={tf.id}>{tf.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* LEVEL 3: OPERATOR & SUB-FIELD (3 cols) */}
+                        <div className="col-span-3 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Operator / Condition</label>
+                          <div className="flex items-center gap-1.5">
+                            {hasSubFields && (
+                              <select
+                                value={rule.subField || itemConfig.subFields[0].id}
+                                onChange={(e) => handleSubFieldChange(group.id, rule.id, e.target.value)}
+                                className="w-1/3 bg-bgPanel text-accent rounded p-1.5 text-[10px] focus:outline-none border border-borderHairline"
+                              >
+                                {itemConfig.subFields.map((sf) => (
+                                  <option key={sf.id} value={sf.id}>{sf.label}</option>
+                                ))}
+                              </select>
+                            )}
+
+                            <select
+                              value={rule.operator}
+                              onChange={(e) => handleOperatorChange(group.id, rule.id, e.target.value)}
+                              className="flex-1 bg-bgPanel text-textPrimary rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                            >
+                              {itemConfig.operators.map((op) => (
+                                <option key={op.id} value={op.id}>{op.label}</option>
+                              ))}
+                            </select>
                           </div>
-                        )}
-                      </div>
+                        </div>
 
-                      {/* DELETE ROW BUTTON (1 col) */}
-                      <div className="col-span-1 flex items-center justify-end pt-3">
-                        <button
-                          onClick={() => handleDeleteRule(group.id, rule.id)}
-                          className="p-1.5 text-textMuted hover:text-down rounded hover:bg-down/10 transition"
-                          title="Remove condition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* LEVEL 4: VALUE (1 col) */}
+                        <div className="col-span-1 space-y-0.5">
+                          <label className="text-[8px] font-bold uppercase text-textMuted block font-sans">Target</label>
+                          {rule.valueType === 'number' ? (
+                            <input
+                              type="number"
+                              step="any"
+                              value={rule.value ?? ''}
+                              onChange={(e) => handleFieldChange(group.id, rule.id, 'value', Number(e.target.value))}
+                              className="w-full bg-bgPanel text-up font-bold rounded p-1.5 text-[11px] focus:outline-none border border-borderHairline"
+                              placeholder="38"
+                            />
+                          ) : (
+                            <div className="p-1.5 text-[9px] text-textMuted bg-bgPanel/50 rounded text-center border border-borderHairline">
+                              N/A
+                            </div>
+                          )}
+                        </div>
+
+                        {/* DELETE BUTTON (1 col) */}
+                        <div className="col-span-1 flex items-center justify-end pt-3">
+                          <button
+                            onClick={() => handleDeleteRule(group.id, rule.id)}
+                            className="p-1.5 text-textMuted hover:text-down rounded hover:bg-down/10 transition"
+                            title="Remove condition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </React.Fragment>
         ))}
-      </div>
 
-      {/* BOTTOM ACTIONS BAR */}
-      <div className="flex items-center justify-between pt-2">
         <button
           onClick={handleAddGroup}
-          className="px-3 py-1.5 rounded-lg bg-bgPanel hover:bg-bgElevated text-accent text-xs font-bold flex items-center gap-1.5 border border-borderHairline transition shadow-sm"
+          className="px-3.5 py-2 rounded-lg bg-bgPanel hover:bg-bgElevated text-accent text-xs font-bold flex items-center gap-1.5 border border-borderHairline transition shadow-sm"
         >
           <Split className="w-3.5 h-3.5" />
-          <span>+ Add Nested Condition Group</span>
+          <span>+ Add Confluence Condition Group</span>
         </button>
+      </div>
 
-        <div className="flex items-center gap-2 text-[10px] text-textMuted font-sans">
-          <span>Manual edits persist automatically into strategy compiler AST.</span>
+      {/* 5. PERSISTENT RISK & POSITION SIZING SECTION (Fix 5) */}
+      <div className="p-4 rounded-xl bg-bgPanel border border-borderHairline space-y-3 shadow-md">
+        <div className="flex items-center justify-between border-b border-borderHairline pb-2">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-warn" />
+            <span className="font-bold text-textPrimary text-xs uppercase font-sans">
+              3. Risk Management & Exit Protocol
+            </span>
+          </div>
+          <span className="text-[9px] px-2 py-0.5 rounded bg-warn/15 text-warn font-bold">
+            MANDATORY CAPITAL SAFEGUARDS
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 font-sans">
+          {/* Risk Per Trade */}
+          <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline space-y-1">
+            <label className="text-[9px] font-bold uppercase text-textMuted block">Risk Per Trade (%)</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5.0"
+                value={riskState.risk_percent_per_trade}
+                onChange={(e) => handleRiskFieldChange('risk_percent_per_trade', Number(e.target.value))}
+                className="w-full bg-bgPanel text-gold font-bold rounded p-1.5 text-xs focus:outline-none border border-borderHairline"
+              />
+              <span className="text-textMuted font-bold text-xs">%</span>
+            </div>
+          </div>
+
+          {/* Stop Loss Value */}
+          <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline space-y-1">
+            <label className="text-[9px] font-bold uppercase text-textMuted block">Stop Loss Distance</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="1"
+                min="5"
+                max="100"
+                value={riskState.sl_value}
+                onChange={(e) => handleRiskFieldChange('sl_value', Number(e.target.value))}
+                className="w-full bg-bgPanel text-down font-bold rounded p-1.5 text-xs focus:outline-none border border-borderHairline"
+              />
+              <span className="text-textMuted font-bold text-xs">pips</span>
+            </div>
+          </div>
+
+          {/* Take Profit RR */}
+          <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline space-y-1">
+            <label className="text-[9px] font-bold uppercase text-textMuted block">Target Risk:Reward</label>
+            <div className="flex items-center gap-1">
+              <span className="text-textMuted font-bold text-xs">1:</span>
+              <input
+                type="number"
+                step="0.1"
+                min="1.0"
+                max="10.0"
+                value={riskState.tp_value}
+                onChange={(e) => handleRiskFieldChange('tp_value', Number(e.target.value))}
+                className="w-full bg-bgPanel text-up font-bold rounded p-1.5 text-xs focus:outline-none border border-borderHairline"
+              />
+              <span className="text-textMuted font-bold text-xs">RR</span>
+            </div>
+          </div>
+
+          {/* Max Open Trades */}
+          <div className="p-3 rounded-lg bg-bgElevated border border-borderHairline space-y-1">
+            <label className="text-[9px] font-bold uppercase text-textMuted block">Max Concurrent Trades</label>
+            <input
+              type="number"
+              min="1"
+              max="5"
+              value={riskState.max_open_trades}
+              onChange={(e) => handleRiskFieldChange('max_open_trades', Number(e.target.value))}
+              className="w-full bg-bgPanel text-textPrimary font-bold rounded p-1.5 text-xs focus:outline-none border border-borderHairline"
+            />
+          </div>
         </div>
       </div>
     </div>
